@@ -23,7 +23,7 @@ namespace perception {
 
 class LaneDetector{
 public:
-	LaneDetector(const int show_flag, const int debug_flag);
+    LaneDetector(const bool show_flag, const bool debug_flag);
 	int DetectLane(const cv::Mat frame, const int keep_state);
 	int GetDetectionResult(std::vector<Lane> &result, cv::Mat &img);
 
@@ -123,10 +123,9 @@ private:
 	cv::Mat perspective_matrix_;
 	cv::Mat inverse_perspective_matrix_;
 
-	
-	int debug_flag_;
-	int show_flag_;
-	int save_flag_;
+    bool debug_flag_;
+    bool show_flag_;
+    bool save_flag_;
 }; //struct Lane
 } //namespace perception
 } //namespace vecan

@@ -21,11 +21,10 @@
 namespace vecan {
 namespace perception {
 
-LaneDetector::LaneDetector(const int show_flag, const int debug_flag){
+LaneDetector::LaneDetector(const bool show_flag, const bool debug_flag){
     show_flag_ = show_flag;
     debug_flag_ = debug_flag;
     save_flag_ = 1;
-
 }
 
 int LaneDetector::DetectLane(const cv::Mat frame, const int keep_state) {
@@ -102,17 +101,13 @@ int LaneDetector::GetStopLineBinary(const cv::Mat img_gray,
     const int stop_line_width,
     const int difference_threshold) {
     img_binary_stop_line = cv::Mat(img_gray.size(), CV_8U);
-
+    img_binary_stop_line.setTo(0);
     int diff_left, diff_right;
-    int diff_threshold = 40;
-    for (int row = 0 + stop_line_width; row < img_gray.rows - stop_line_width; row++)
-    {
-        for (int col = 0; col < img_gray.cols; col++)
-        {
+    for (int row = 0 + stop_line_width; row < img_gray.rows - stop_line_width; row++){
+        for (int col = 0; col < img_gray.cols; col++){
             diff_left = img_gray.at<uchar>(row, col) - img_gray.at<uchar>(row - stop_line_width, col);
             diff_right = img_gray.at<uchar>(row, col) - img_gray.at<uchar>(row + stop_line_width, col);
-            if (diff_left > diff_threshold && diff_right > diff_threshold)
-            {
+            if (diff_left > difference_threshold && diff_right > difference_threshold){
                 img_binary_stop_line.at<uchar>(row, col) = 255;
             }
         }
@@ -133,7 +128,7 @@ int LaneDetector::GetBinary(const cv::Mat frame_input) {
     corners_source[2] = cv::Point2f(201, 712);
     corners_source[3] = cv::Point2f(1085, 712);
 
-    int tmp_row_offset = 150;
+    int tmp_row_offset = 450;
     int tmp_col_offset_left = 460;
     int tmp_col_offset_right = 460;
     //int tmp_row_offset = 550;
@@ -197,14 +192,14 @@ int LaneDetector::GetLaneLineCenter(const int histogram_width,
     int number_histogram = floor(img_bird_eye_binary_.cols / histogram_width);
     cv::Mat histogram = cv::Mat(1, number_histogram, CV_32S, 0.0);
     for (int number = 0; number < number_histogram; ++number)
-        for (int row = img_bird_eye_binary_.rows / 3; row < img_bird_eye_binary_.rows; row++){
+        for (int row = img_bird_eye_binary_.rows / 1.5; row < img_bird_eye_binary_.rows; row++){
             for (int tmp_col = number*histogram_width; tmp_col < (number +1)*histogram_width; ++tmp_col){
                 if (img_bird_eye_binary_.at<uchar>(row, tmp_col) == 255)
                     histogram.at<int>(0, number) = histogram.at<int>(0, number) + 1;
             }//for tmp_col
         }//for row
 
-    std::cout << histogram << std::endl;
+    //std::cout << histogram << std::endl;
 
     //得到直方图峰值
     int tmp_windows_width = windows_width/ histogram_width;
@@ -245,7 +240,7 @@ int LaneDetector::GetStopLineCenter(const int histogram_width,
     int number_histogram = floor(img_binary_stop_line.rows / histogram_width);
     cv::Mat histogram = cv::Mat(1, number_histogram, CV_32S, 0.0);
     for (int number = 0; number < number_histogram; ++number)
-        for (int col = 0; col < img_binary_stop_line.cols; ++col) {
+        for (int col = img_binary_stop_line.cols/2; col < img_binary_stop_line.cols; ++col) {
             for (int tmp_row = number*histogram_width; tmp_row < (number + 1)*histogram_width; ++tmp_row) {
                 if (img_binary_stop_line.at<uchar>(tmp_row, col) == 255)
                     histogram.at<int>(0, number) += 1;
