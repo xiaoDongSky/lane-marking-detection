@@ -50,6 +50,10 @@ struct LaneLine {
 	int curvature;
 	// The veracity of the detection;
 	float score;
+    // The start raw
+    int start_row;
+    // The end raw
+    int end_row;
 }; //struct LaneLine
 
 } //namespace perception

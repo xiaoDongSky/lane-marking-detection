@@ -15,25 +15,26 @@
 #include <set>
 #include <vector>
 
+#include "local_messages/Road.h"
+
 #include "../include/lane_detector.h"
 #include "../include/lane_line_fitter.h"
 
 namespace vecan {
 namespace perception {
 
-LaneDetector::LaneDetector(const bool show_flag, const bool debug_flag){
+LaneDetector::LaneDetector(const bool show_flag, const bool debug_flag, const bool save_flag){
     show_flag_ = show_flag;
     debug_flag_ = debug_flag;
-    save_flag_ = 1;
+    save_flag_ = save_flag;
 }
 
-int LaneDetector::DetectLane(const cv::Mat frame, const int keep_state) {
+int LaneDetector::DetectLane(const cv::Mat frame) {
     GetBinary(frame);
-    std::vector<int> line_center_points;
     //GetLaneLines(1000);
     GetLaneLines(2000);
     if (debug_flag_) {
-        std::cout << lane_lines_.size() << " lines are detected" << std::endl;
+        std::cout << lane_lines_.size() << " lines are detected" << "    ";
     }
     GetLane(200, 500);
     TrackLane(200, 500);
@@ -55,30 +56,33 @@ int LaneDetector::GetBinaryFromHSV(const cv::Mat frame,
                                    cv::Mat &img_binary_HSV)
 {
     if (frame.empty()) {
+        std::cout<<"error in GetBinaryFromHSV: frame is empty" <<std::endl;
         return false;
-    }
+    }//if
     cv::Mat tmp_image_HSV;
     cvtColor(frame, tmp_image_HSV, cv::COLOR_BGR2HSV);
     cv::inRange(tmp_image_HSV, HSV_low, HSV_high, img_binary_HSV);
     return true;
-}
+}//GetBinaryFromHSV
 
 int LaneDetector::GetBinaryFromEqualizedGrayscale(const cv::Mat img_gray,
                                                   const int gray_threshold,
                                                   cv::Mat &img_binary_equalized){
     if (img_gray.empty()) {
+        std::cout<<"error in GetBinaryFromEqualizedGrayscale: img_gray is empty"<<std::endl;
         return false;
     }//if
     equalizeHist(img_gray, img_binary_equalized);
     threshold(img_gray, img_binary_equalized, gray_threshold, 255, cv::THRESH_BINARY);
     return true;
-}
+}//GetBinaryFromEqualizedGrayscale
 
 int LaneDetector::GetBinaryFromRules(const cv::Mat img_gray,
                                      const int lane_line_width,
                                      const int difference_threshold,
                                      cv::Mat &img_binary_rules) {
     if (img_gray.empty()) {
+        std::cout<<"error in GetBinaryFromRules: image_gray is empty"<<std::endl;
         return false;
     }//if
 
@@ -95,28 +99,34 @@ int LaneDetector::GetBinaryFromRules(const cv::Mat img_gray,
         }//for col
     }//for row
     return true;
-}
+}//GetBinaryFromRules
 
 int LaneDetector::GetStopLineBinary(const cv::Mat img_gray,
-    const int stop_line_width,
-    const int difference_threshold) {
-    img_binary_stop_line = cv::Mat(img_gray.size(), CV_8U);
-    img_binary_stop_line.setTo(0);
+                                    const int stop_line_width,
+                                    const int difference_threshold) {
+    if (img_gray.empty()) {
+        std::cout<<"error in GetStopLineBinary: image_gray is empty"<<std::endl;
+        return false;
+    }//if
+
+    img_binary_stop_line_ = cv::Mat(img_gray.size(), CV_8U);
+    img_binary_stop_line_.setTo(0);
     int diff_left, diff_right;
     for (int row = 0 + stop_line_width; row < img_gray.rows - stop_line_width; row++){
         for (int col = 0; col < img_gray.cols; col++){
             diff_left = img_gray.at<uchar>(row, col) - img_gray.at<uchar>(row - stop_line_width, col);
             diff_right = img_gray.at<uchar>(row, col) - img_gray.at<uchar>(row + stop_line_width, col);
             if (diff_left > difference_threshold && diff_right > difference_threshold){
-                img_binary_stop_line.at<uchar>(row, col) = 255;
+                img_binary_stop_line_.at<uchar>(row, col) = 255;
             }
         }
     }
-    return 0;
-}
+    return true;
+}//GetStopLineBinary
 
 int LaneDetector::GetBinary(const cv::Mat frame_input) {
     if (frame_input.empty()) {
+        std::cout<<"error in GetBinary: no input frame"<<std::endl;
         return false;
     }//if
     std::vector<cv::Point2f> corners_source(4);
@@ -152,39 +162,49 @@ int LaneDetector::GetBinary(const cv::Mat frame_input) {
     cv::bitwise_and(img_binary_rules, img_binary_equalized, img_bird_eye_binary_);
 
     if (debug_flag_) {
+        cv::imshow("img_bird_eye_", img_bird_eye_);
         cv::imshow("img_binary_rules", img_binary_rules);
         cv::imshow("img_binary_equalized", img_binary_equalized);
         cv::imshow("img_bird_eye_binary_", img_bird_eye_binary_);
+        cv::imshow("img_binary_stop_line_", img_binary_stop_line_);
         cvWaitKey(1);
     }//if
 
     if (save_flag_) {
+        cv::imwrite("../result/source_img.bmp", img_source_);
+        cv::imwrite("../result/bird_eye_img.bmp", img_bird_eye_);
+        cv::imwrite("../result/binary_rules_img.bmp", img_binary_rules);
+        cv::imwrite("../result/binary_equalized_img.bmp", img_binary_equalized);
+        cv::imwrite("../result/binary_bird_eye_img.bmp", img_bird_eye_binary_);
+        cv::imwrite("../result/binary_stop_line.bmp", img_binary_stop_line_);
+    }//if
 
-        cv::imwrite("..//result//source_img.bmp", img_source_);
-        cv::imwrite("..//result//bird_eye_img.bmp", img_bird_eye_);
-        cv::imwrite("..//result//binary_rules_img.bmp", img_binary_rules);
-        cv::imwrite("..//result//binary_equalized_img.bmp", img_binary_equalized);
-        cv::imwrite("..//result//binary_bird_eye_img.bmp", img_bird_eye_binary_);
-        cv::imwrite("..//result//binary_stop_line.bmp", img_binary_stop_line);
-    }
     return true;
-}
+}//GetBinary
 
 int LaneDetector::GetPerspectiveMatrix(const std::vector<cv::Point2f> corners_source,
                                        const std::vector<cv::Point2f> corners_trans) {
     if (corners_source.size() != 4 || corners_trans.size() != 4) {
+        std::cout<< "error in GetPerspectiveMatrix" <<std::endl;
         return false;
     }//if
     perspective_matrix_ = cv::getPerspectiveTransform(corners_source, corners_trans);
     inverse_perspective_matrix_ = cv::getPerspectiveTransform(corners_trans, corners_source);
     return true;
-}
+}//GetPerspectiveMatrix
 
 int LaneDetector::GetLaneLineCenter(const int histogram_width,
                                     const int windows_width,
                                     const int windows_min_numbers,
+                                    const int start_row,
                                     std::vector<int> &center_points) const {
     if (img_bird_eye_binary_.empty()) {
+        std::cout<<"error in GetLaneLineCenter: img_bird_eye_binary_ is empty"<<std::endl;
+        return false;
+    }//if
+
+    if (start_row >= img_bird_eye_binary_.rows || start_row < 0) {
+        std::cout<<"error in GetLaneLineCenter: start_row is not good"<<std::endl;
         return false;
     }//if
 
@@ -192,7 +212,7 @@ int LaneDetector::GetLaneLineCenter(const int histogram_width,
     int number_histogram = floor(img_bird_eye_binary_.cols / histogram_width);
     cv::Mat histogram = cv::Mat(1, number_histogram, CV_32S, 0.0);
     for (int number = 0; number < number_histogram; ++number)
-        for (int row = img_bird_eye_binary_.rows / 1.5; row < img_bird_eye_binary_.rows; row++){
+        for (int row = start_row; row < img_bird_eye_binary_.rows; row++){
             for (int tmp_col = number*histogram_width; tmp_col < (number +1)*histogram_width; ++tmp_col){
                 if (img_bird_eye_binary_.at<uchar>(row, tmp_col) == 255)
                     histogram.at<int>(0, number) = histogram.at<int>(0, number) + 1;
@@ -226,23 +246,31 @@ int LaneDetector::GetLaneLineCenter(const int histogram_width,
         }//if
     }//for
 
+    if(debug_flag_){
+        std::cout<<center_points.size()<<" center points are found:  ";
+        for(int i = 0; i < center_points.size(); ++i){
+            std::cout<<center_points[i]<<"  ";
+        }
+        std::cout<<std::endl;
+    }//if
+
     return true;
 }//function GetLaneLineCenter
 
 int LaneDetector::GetStopLineCenter(const int histogram_width,
     const int histogram_min_pixels,
     int &center_point) const {
-    if (img_binary_stop_line.empty()) {
+    if (img_binary_stop_line_.empty()) {
         return false;
     }//if
 
      //获取直方图
-    int number_histogram = floor(img_binary_stop_line.rows / histogram_width);
+    int number_histogram = floor(img_binary_stop_line_.rows / histogram_width);
     cv::Mat histogram = cv::Mat(1, number_histogram, CV_32S, 0.0);
     for (int number = 0; number < number_histogram; ++number)
-        for (int col = img_binary_stop_line.cols/2; col < img_binary_stop_line.cols; ++col) {
+        for (int col = img_binary_stop_line_.cols/2; col < img_binary_stop_line_.cols; ++col) {
             for (int tmp_row = number*histogram_width; tmp_row < (number + 1)*histogram_width; ++tmp_row) {
-                if (img_binary_stop_line.at<uchar>(tmp_row, col) == 255)
+                if (img_binary_stop_line_.at<uchar>(tmp_row, col) == 255)
                     histogram.at<int>(0, number) += 1;
             }//for tmp_col
         }//for row
@@ -264,7 +292,7 @@ int LaneDetector::GetStopLine(const int number_windows,
     const int window_half_width,
     const int window_min_pixels,
     const int stop_line_min_pixels) {
-    if (img_binary_stop_line.empty()) {
+    if (img_binary_stop_line_.empty()) {
         return -1;
     }//if
     stop_line_.lines_factors.clear();
@@ -276,7 +304,7 @@ int LaneDetector::GetStopLine(const int number_windows,
     int tmp_center = center_point;
     cv::Mat windows_img;
     if (debug_flag_) {
-        windows_img = img_binary_stop_line.clone();
+        windows_img = img_binary_stop_line_.clone();
         cvtColor(windows_img, windows_img, cv::COLOR_GRAY2BGR);
     }//if
     int window_height = floor(img_bird_eye_binary_.cols / number_windows);
@@ -288,9 +316,9 @@ int LaneDetector::GetStopLine(const int number_windows,
         int win_y_high = tmp_center + window_half_width;
         int win_x_low = index_windows * window_height;
         int win_x_high = (index_windows + 1) * window_height;
-        win_x_high = cv::min(win_x_high, img_binary_stop_line.cols);
+        win_x_high = cv::min(win_x_high, img_binary_stop_line_.cols);
         win_x_low = cv::max(win_x_low, 0);
-        win_y_high = cv::min(win_y_high, img_binary_stop_line.rows);
+        win_y_high = cv::min(win_y_high, img_binary_stop_line_.rows);
         win_y_low = cv::max(win_y_low, 0);
         if (debug_flag_) {
             cv::rectangle(windows_img, cv::Point(win_x_low, win_y_low), cv::Point(win_x_high, win_y_high), cv::Scalar(0, 255, 0), 2);
@@ -302,7 +330,7 @@ int LaneDetector::GetStopLine(const int number_windows,
         for (int row = win_y_low; row < win_y_high; row++)
             for (int col = win_x_low; col < win_x_high; col++)
             {
-                if (img_binary_stop_line.at<uchar>(row, col) == 255)
+                if (img_binary_stop_line_.at<uchar>(row, col) == 255)
                 {
                     window_inds_x.push_back(col);
                     window_inds_y.push_back(row);
@@ -340,6 +368,7 @@ int LaneDetector::GetCandidateBySlidingWindows(const std::vector<int> center_poi
     std::vector< std::vector<int>> &candidate_y){
 
     if (img_bird_eye_binary_.empty()) {
+        std::cout<<"error in GetCandidateBySlidingWindows: img_bird_eye_binary_ is empty "<<std::endl;
         return false;
     }//if
 
@@ -412,14 +441,16 @@ int LaneDetector::GetCandidateBySlidingWindows(const std::vector<int> center_poi
 
 int LaneDetector::GetLaneLines(const int lane_line_min_pixels){
     std::vector<int> line_center_points;
-    GetLaneLineCenter(10, 100, 50, line_center_points);
+    GetLaneLineCenter(10, 100, 50, 600, line_center_points);
+
     std::vector< std::vector<int>> candidate_x;
     std::vector< std::vector<int>> candidate_y;
     GetCandidateBySlidingWindows(line_center_points,20,50,100, candidate_x, candidate_y);
 
     if (candidate_x.size() != candidate_y.size()) {
+        std::cout<<"error in GetLaneLines: candidate points not good "<<std::endl;
         return false;
-    }
+    }//if
 
     lane_lines_.clear();
     const cv::Scalar HSV_yello_low(10, 3, 150);
@@ -441,17 +472,49 @@ int LaneDetector::GetLaneLines(const int lane_line_min_pixels){
                 if (img_HSV.at<uchar>(candidate_y[line_index][point_index], candidate_x[line_index][point_index]) > 0)
                     yellow_points_num++;
             }
+
             if (yellow_points_num * 3 > candidate_x[line_index].size())
                 tmp_line.color = LaneLine::YELLOW;
             else
                 tmp_line.color = LaneLine::WHITE;
+
+            GetLaneLineTypeAndRange(candidate_y[line_index],tmp_line);
             tmp_line.ID = line_index;
             tmp_line.lines_factors = tmp_factors;
             lane_lines_.push_back(tmp_line);
         }//if
     }//for line_index
 
-}//GetCandidateBySlidingWindows
+}//GetLaneLines
+
+int LaneDetector::GetLaneLineTypeAndRange(std::vector<int> candidate_y, LaneLine &lane_line){
+    if(candidate_y.empty()){
+        std::cout<<"error in GetLaneLinesType: candidate_y is empty"<<std::endl;
+        return false;
+    }
+    std::set<int> row_record;
+    for (int point_index = 0; point_index < candidate_y.size(); ++point_index)
+    {
+        row_record.insert(candidate_y[point_index]);
+    }
+    std::set<int>::iterator tmp_it =row_record.end();
+    tmp_it--;
+    int candidata_y_max = *tmp_it;
+    int candidata_y_min = *(row_record.begin());
+
+    if(row_record.size() * 2 > (candidata_y_max - candidata_y_min)){
+        lane_line.type = LaneLine::SOLID;
+    }
+    else{
+        lane_line.type = LaneLine::DASHED;
+    }
+
+    lane_line.start_row = candidata_y_max;
+    lane_line.end_row = candidata_y_min;
+    return true;
+
+
+}//GetLaneLinesType
 
 int LaneDetector::CalculateCurvature(const std::vector<double> factors, const int point_row, double &curvature){
     if (factors.size() != 3) {

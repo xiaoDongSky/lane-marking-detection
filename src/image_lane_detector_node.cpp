@@ -23,17 +23,17 @@
 #include "../include/lane_detector.h"
 #include "../include/lane.h"
 
+
 //global image
 cv::Mat image_source;
-
 void imageCallback(const sensor_msgs::ImageConstPtr& msg){
-  try{
-    cv::Mat tmp = cv_bridge::toCvShare(msg, "bgr8")->image;
-    image_source = tmp.clone();
-  }
-  catch (cv_bridge::Exception& e){
-    ROS_ERROR("Could not convert from '%s' to 'bgr8'.", msg->encoding.c_str());
-  }
+    try{
+        cv::Mat tmp = cv_bridge::toCvShare(msg, "bgr8")->image;
+        image_source = tmp.clone();
+    }
+    catch (cv_bridge::Exception& e){
+        ROS_ERROR("Could not convert from '%s' to 'bgr8'.", msg->encoding.c_str());
+    }
 }
 
 int main(int argc, char **argv) {
@@ -43,15 +43,16 @@ int main(int argc, char **argv) {
     image_transport::Subscriber camera_sub = it.subscribe("camera", 1, imageCallback);
 
     //off-line pictures path
-    std::string pictures_path_prefix = "/home/vecan/vecan_ugv/data/real_data/";
+    std::string pictures_path_prefix = "/var/local/vu/image_data/lane_image1/";
     std::string pictures_path;
     int frame_index = 0;
     char postfix_buffer[20];
 
-    vecan::perception::LaneDetector lane_detector(1,1);
-    bool on_line = false;
+    vecan::perception::LaneDetector lane_detector(true,true,false);
+
     cv::Mat img_output;
 
+    bool on_line = false;
     while (ros::ok()) {
         if(on_line){
             ros::spinOnce();
@@ -61,12 +62,13 @@ int main(int argc, char **argv) {
             pictures_path = pictures_path_prefix + postfix_buffer;
             image_source = cv::imread(pictures_path);
         }//else
-            lane_detector.DetectLane(image_source,0);
-            std::vector<vecan::perception::Lane> result;
-            lane_detector.GetDetectionResult(result, img_output);
-            //video_writer.write(img_output);
-            std::cout << "frame: " << frame_index << "    " << result.size() << " lanes detected;" << std::endl;
-            frame_index++;
+        std::cout << "frame: " << frame_index << "    ";
+        lane_detector.DetectLane(image_source);
+        std::vector<vecan::perception::Lane> result;
+        lane_detector.GetDetectionResult(result, img_output);
+
+        std::cout << result.size() << " lanes detected;" << std::endl;
+        frame_index++;
     }
 
     return 0;

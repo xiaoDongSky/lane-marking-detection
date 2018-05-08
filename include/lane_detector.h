@@ -23,8 +23,8 @@ namespace perception {
 
 class LaneDetector{
 public:
-    LaneDetector(const bool show_flag, const bool debug_flag);
-	int DetectLane(const cv::Mat frame, const int keep_state);
+    LaneDetector(const bool show_flag, const bool debug_flag, const bool save_flag);
+    int DetectLane(const cv::Mat frame);
 	int GetDetectionResult(std::vector<Lane> &result, cv::Mat &img);
 
 private:
@@ -77,10 +77,11 @@ private:
 		                     const std::vector<cv::Point2f> corners_trans);
 
 
-	int GetLaneLineCenter(const int histogram_width,
-		                  const int windows_width,
-		                  const int windows_min_numbers,
-		                  std::vector<int> &center_points) const;
+    int GetLaneLineCenter(const int histogram_width,
+                          const int windows_width,
+                          const int windows_min_numbers,
+                          const int start_row,
+                          std::vector<int> &center_points) const;
 
 	int GetStopLineCenter(const int histogram_width,
 		const int histogram_min_pixels,
@@ -98,7 +99,9 @@ private:
                                      std::vector<std::vector<int> > &candidate_x,
                                      std::vector<std::vector<int> > &candidate_y);
 
-	int GetLaneLines(const int lane_line_min_pixels);
+    int GetLaneLines(const int lane_line_min_pixels);
+
+    static int GetLaneLineTypeAndRange(std::vector<int> candidate_y, LaneLine &lane_line);
 
 	static int CalculateCurvature(const std::vector<double> factors,const int point_row, double &curvature);
 
@@ -118,7 +121,7 @@ private:
 	cv::Mat img_source_;
 	cv::Mat img_bird_eye_;
 	cv::Mat img_bird_eye_binary_;
-	cv::Mat img_binary_stop_line;
+    cv::Mat img_binary_stop_line_;
 	cv::Mat img_display_;
 	cv::Mat perspective_matrix_;
 	cv::Mat inverse_perspective_matrix_;
