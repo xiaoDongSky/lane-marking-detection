@@ -13,6 +13,8 @@
 #include "lane_line.h"
 #include "lane.h"
 #include "stop_line.h"
+#include "local_messages/Road.h"
+
 /**
 * @namespace vecan::perception
 * @brief vecan::perception
@@ -26,6 +28,7 @@ public:
     LaneDetector(const bool show_flag, const bool debug_flag, const bool save_flag);
     int DetectLane(const cv::Mat frame);
 	int GetDetectionResult(std::vector<Lane> &result, cv::Mat &img);
+    int PublishRoadMsg(local_messages::Road road_msg);
 
 private:
 
@@ -111,6 +114,7 @@ private:
 	int LineShow(const LaneLine line);
 	int StopLineShow();
 	int TrackLane(const int min_lane_width, const int max_lane_width);
+
 
 private:
 	StopLine stop_line_;

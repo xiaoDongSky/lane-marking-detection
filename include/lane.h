@@ -38,9 +38,22 @@ struct Lane {
 	//lane detection score
 	int score;
 	//lane ID
-	int ID;
+    int id;
 	//tracking flag
 	bool tracking;
+    // The index of the lane with respect to the vehicle.
+    // The lane where the vehicle is is indeitified as 0, the one on the left is -1,
+    // the one on the right is 1, and so on.
+    int offsetIndex;
+
+    // Distance to the vehicle, with direction.
+    // This value is negative when the lane is on the left side of the vehicle, positive when right.
+    float offset;
+
+    // Difference between the lane and the vehicle's heading, in rad.
+    // This value is negative when the lane is tilt to the left of the vehicle, positive when right.
+    float dirDiff;
+
 	//find ==
 	bool operator==(const Lane& objstruct) const {
 		return (objstruct.center >= center - 50) && (objstruct.center <= center + 50);

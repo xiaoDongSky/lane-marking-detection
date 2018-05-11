@@ -38,7 +38,7 @@ struct LaneLine {
 	};
 
 	//The ID
-	int ID;
+    int id;
 	// The parameters of lane line function (parabola):
 	// col = lines_factors[2] * row^2 + line_factors[1] * row + line_factors[0]
 	std::vector<double> lines_factors;

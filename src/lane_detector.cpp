@@ -15,8 +15,6 @@
 #include <set>
 #include <vector>
 
-#include "local_messages/Road.h"
-
 #include "../include/lane_detector.h"
 #include "../include/lane_line_fitter.h"
 
@@ -251,7 +249,6 @@ int LaneDetector::GetLaneLineCenter(const int histogram_width,
         for(int i = 0; i < center_points.size(); ++i){
             std::cout<<center_points[i]<<"  ";
         }
-        std::cout<<std::endl;
     }//if
 
     return true;
@@ -445,7 +442,7 @@ int LaneDetector::GetLaneLines(const int lane_line_min_pixels){
 
     std::vector< std::vector<int>> candidate_x;
     std::vector< std::vector<int>> candidate_y;
-    GetCandidateBySlidingWindows(line_center_points,20,50,100, candidate_x, candidate_y);
+    GetCandidateBySlidingWindows(line_center_points,30,50,100, candidate_x, candidate_y);
 
     if (candidate_x.size() != candidate_y.size()) {
         std::cout<<"error in GetLaneLines: candidate points not good "<<std::endl;
@@ -479,7 +476,7 @@ int LaneDetector::GetLaneLines(const int lane_line_min_pixels){
                 tmp_line.color = LaneLine::WHITE;
 
             GetLaneLineTypeAndRange(candidate_y[line_index],tmp_line);
-            tmp_line.ID = line_index;
+            tmp_line.id = line_index;
             tmp_line.lines_factors = tmp_factors;
             lane_lines_.push_back(tmp_line);
         }//if
@@ -624,7 +621,7 @@ int LaneDetector::TrackLane(const int min_lane_width, const int max_lane_width) 
             for (int lane_index = 0; lane_index < lanes_.size(); ++lane_index) {
                 tracking_lanes_.push_back(lanes_[lane_index]);
                 tracking_lanes_[lane_index].score = 1;
-                tracking_lanes_[lane_index].ID = lane_index;
+                tracking_lanes_[lane_index].id = lane_index;
             }//for lane_index
         }
         else {
@@ -638,7 +635,7 @@ int LaneDetector::TrackLane(const int min_lane_width, const int max_lane_width) 
             for (int lane_index = 0; lane_index < combined_lanes_index[max_index].size(); ++lane_index) {
                 tracking_lanes_.push_back(lanes_[combined_lanes_index[max_index][lane_index]]);
                 tracking_lanes_[lane_index].score = 1;
-                tracking_lanes_[lane_index].ID = lane_index;
+                tracking_lanes_[lane_index].id = lane_index;
             }//for lane_index
         }
     }//if empty
@@ -653,17 +650,17 @@ int LaneDetector::TrackLane(const int min_lane_width, const int max_lane_width) 
                 if (lanes_[lane_index].center - (*(it - 1)).center > min_lane_width &&
                     lanes_[lane_index].center - (*(it - 1)).center < max_lane_width){
                     lanes_[lane_index].score = 1;
-                    lanes_[lane_index].ID = tracking_lanes_.size();
+                    lanes_[lane_index].id = tracking_lanes_.size();
                     tracking_lanes_.push_back(lanes_[lane_index]);
 
                 }//if
                 else if (-lanes_[lane_index].center +(*tracking_lanes_.begin()).center > min_lane_width &&
                     -lanes_[lane_index].center + (*tracking_lanes_.begin()).center < max_lane_width) {
                     for (int index = 0; index < tracking_lanes_.size(); ++index) {
-                        tracking_lanes_[index].ID += 1;
+                        tracking_lanes_[index].id += 1;
                     }
                     lanes_[lane_index].score = 1;
-                    lanes_[lane_index].ID = 0;
+                    lanes_[lane_index].id = 0;
                     tracking_lanes_.push_back(lanes_[lane_index]);
 
                 }
@@ -672,7 +669,7 @@ int LaneDetector::TrackLane(const int min_lane_width, const int max_lane_width) 
             else {
                 lanes_[lane_index].tracking = true;
                 lanes_[lane_index].score = cv::min((*it).score + 1, 6);
-                lanes_[lane_index].ID = (*it).ID;
+                lanes_[lane_index].id = (*it).id;
                 (*it) = lanes_[lane_index];
             }//else
         }//for
@@ -706,12 +703,12 @@ int LaneDetector::LaneLinesShow(){
 
     for (int lane_index = 0; lane_index < tracking_lanes_.size(); ++lane_index) {
         if (tracking_lanes_[lane_index].score >= 3) {
-            if (drawID.count(tracking_lanes_[lane_index].left_line.ID) == 0) {
-                drawID.insert(tracking_lanes_[lane_index].left_line.ID);
+            if (drawID.count(tracking_lanes_[lane_index].left_line.id) == 0) {
+                drawID.insert(tracking_lanes_[lane_index].left_line.id);
                 LineShow(tracking_lanes_[lane_index].left_line);
             }//
-            if (drawID.count(tracking_lanes_[lane_index].right_line.ID) == 0) {
-                drawID.insert(tracking_lanes_[lane_index].right_line.ID);
+            if (drawID.count(tracking_lanes_[lane_index].right_line.id) == 0) {
+                drawID.insert(tracking_lanes_[lane_index].right_line.id);
                 LineShow(tracking_lanes_[lane_index].right_line);
             }
         }
@@ -763,6 +760,39 @@ int LaneDetector::StopLineShow() {
     }//for row
 
 }//LineShow
+
+int LaneDetector::PublishRoadMsg(local_messages::Road road_msg){
+    local_messages::Lane lane_msg;
+    for(int index = 0; index < tracking_lanes_.size() ; ++index){
+        lane_msg.id = tracking_lanes_[index].id;
+        lane_msg.relation = local_messages::Lane::NEAR;
+        lane_msg.preferred = false;
+        lane_msg.offsetIndex = tracking_lanes_[index].offsetIndex;
+        lane_msg.offset = tracking_lanes_[index].offset;
+        lane_msg.dirDiff = tracking_lanes_[index].dirDiff;
+        lane_msg.startPointIndex = 0;
+        if(index >0){
+            lane_msg.leftLaneId = tracking_lanes_[index - 1].id;
+        }
+        if(index < tracking_lanes_.size() -1){
+            lane_msg.rightLaneId = tracking_lanes_[index + 1].id;
+        }
+        if(tracking_lanes_[index].left_change_type == vecan::perception::Lane::PERMIT){
+            lane_msg.canChangeLeft = true;
+        }
+        else{
+            lane_msg.canChangeLeft = false;
+        }
+        if(tracking_lanes_[index].right_change_type == vecan::perception::Lane::PERMIT){
+            lane_msg.canChangeRight = true;
+        }
+        else{
+            lane_msg.canChangeRight = false;
+        }
+        road_msg.lanes.push_back(lane_msg);
+    }
+
+}//PublishRoadMsg
 
 } //namespace perception
 } //namespace vecan
