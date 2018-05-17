@@ -25,12 +25,14 @@ struct StopLine {
 		YELLOW,
 	};
 	// The parameters of stop line function (parabola):
-	// row = lines_factors[2] * col^2 + line_factors[1] * col + line_factors[0]
-	std::vector<double> lines_factors;
+    // row = line_factors[1] * col + line_factors[0]
+    std::vector<double> line_factors;
 	// The color of the lane line;
 	StopLineColor color;
 	// The veracity of the detection;
 	float score;
+    // The flag of detection
+    bool detected_flag;
 }; //struct LaneLine
 
 } //namespace perception

@@ -25,20 +25,28 @@ LaneDetector::LaneDetector(const bool show_flag, const bool debug_flag, const bo
     show_flag_ = show_flag;
     debug_flag_ = debug_flag;
     save_flag_ = save_flag;
+
+    stop_line_.detected_flag = false;
+    vehicle_center_.x = 640;
+    vehicle_center_.y = 0;
+    pixel_to_ground_x_ = 1;
+    pixel_to_ground_y_ = 1;
+    last_lane_id = -1;
 }
 
 int LaneDetector::DetectLane(const cv::Mat frame) {
     GetBinary(frame);
     //GetLaneLines(1000);
+    GetStopLine(20,50,200,5000);
     GetLaneLines(2000);
     if (debug_flag_) {
         std::cout << lane_lines_.size() << " lines are detected" << "    ";
     }
-    GetLane(200, 500);
-    TrackLane(200, 500);
-    GetStopLine(20,50,200,5000);
-    LaneLinesShow();
-
+    GetLane(100, 400);
+    TrackLane(100, 400);
+    if(show_flag_ == true){
+        LaneLinesShow();
+    }
     return true;
 }
 
@@ -136,9 +144,9 @@ int LaneDetector::GetBinary(const cv::Mat frame_input) {
     corners_source[2] = cv::Point2f(201, 712);
     corners_source[3] = cv::Point2f(1085, 712);
 
-    int tmp_row_offset = 450;
-    int tmp_col_offset_left = 460;
-    int tmp_col_offset_right = 460;
+    int tmp_row_offset = 480;
+    int tmp_col_offset_left = 500;
+    int tmp_col_offset_right = 500;
     //int tmp_row_offset = 550;
     //int tmp_col_offset_left = 520;
     //int tmp_col_offset_right = 520;
@@ -169,12 +177,12 @@ int LaneDetector::GetBinary(const cv::Mat frame_input) {
     }//if
 
     if (save_flag_) {
-        cv::imwrite("../result/source_img.bmp", img_source_);
-        cv::imwrite("../result/bird_eye_img.bmp", img_bird_eye_);
-        cv::imwrite("../result/binary_rules_img.bmp", img_binary_rules);
-        cv::imwrite("../result/binary_equalized_img.bmp", img_binary_equalized);
-        cv::imwrite("../result/binary_bird_eye_img.bmp", img_bird_eye_binary_);
-        cv::imwrite("../result/binary_stop_line.bmp", img_binary_stop_line_);
+        cv::imwrite("src/image_lane_detector/result/source_img.bmp", img_source_);
+        cv::imwrite("src/image_lane_detector/result/bird_eye_img.bmp", img_bird_eye_);
+        cv::imwrite("src/image_lane_detector/result/binary_rules_img.bmp", img_binary_rules);
+        cv::imwrite("src/image_lane_detector/result/binary_equalized_img.bmp", img_binary_equalized);
+        cv::imwrite("src/image_lane_detector/result/binary_bird_eye_img.bmp", img_bird_eye_binary_);
+        cv::imwrite("src/image_lane_detector/result/binary_stop_line.bmp", img_binary_stop_line_);
     }//if
 
     return true;
@@ -255,13 +263,13 @@ int LaneDetector::GetLaneLineCenter(const int histogram_width,
 }//function GetLaneLineCenter
 
 int LaneDetector::GetStopLineCenter(const int histogram_width,
-    const int histogram_min_pixels,
-    int &center_point) const {
+                                    const int histogram_min_pixels,
+                                    int &center_point) const {
     if (img_binary_stop_line_.empty()) {
         return false;
     }//if
 
-     //获取直方图
+    //获取直方图
     int number_histogram = floor(img_binary_stop_line_.rows / histogram_width);
     cv::Mat histogram = cv::Mat(1, number_histogram, CV_32S, 0.0);
     for (int number = 0; number < number_histogram; ++number)
@@ -286,13 +294,13 @@ int LaneDetector::GetStopLineCenter(const int histogram_width,
 }//function GetLaneLineCenter
 
 int LaneDetector::GetStopLine(const int number_windows,
-    const int window_half_width,
-    const int window_min_pixels,
-    const int stop_line_min_pixels) {
+                              const int window_half_width,
+                              const int window_min_pixels,
+                              const int stop_line_min_pixels) {
     if (img_binary_stop_line_.empty()) {
         return -1;
     }//if
-    stop_line_.lines_factors.clear();
+    stop_line_.line_factors.clear();
     int center_point = 0;
     GetStopLineCenter(10,500, center_point);
     if (center_point == -1) {
@@ -345,24 +353,29 @@ int LaneDetector::GetStopLine(const int number_windows,
 
     if (stop_line_inds_x.size() > stop_line_min_pixels) {
 
-        fit_state.polyfit(stop_line_inds_x, stop_line_inds_y, 2, true);
-        fit_state.getFactor(stop_line_.lines_factors);
+        fit_state.polyfit(stop_line_inds_x, stop_line_inds_y, 1, true);
+        fit_state.getFactor(stop_line_.line_factors);
+        stop_line_.detected_flag = true;
     }
+    else{
+        stop_line_.detected_flag = false;
+    }
+
     if (debug_flag_) {
         cv::imshow("stop_line_windows", windows_img);
     }
     if (save_flag_) {
-        cv::imwrite("..//result//stop_line_windows.bmp", windows_img);
+        cv::imwrite("src/image_lane_detector/result/stop_line_windows.bmp", windows_img);
     }
     return true;
 }
 
 int LaneDetector::GetCandidateBySlidingWindows(const std::vector<int> center_points,
-    const int number_windows,
-    const int window_half_width,
-    const int window_min_pixels,
-    std::vector< std::vector<int>> &candidate_x,
-    std::vector< std::vector<int>> &candidate_y){
+                                               const int number_windows,
+                                               const int window_half_width,
+                                               const int window_min_pixels,
+                                               std::vector< std::vector<int>> &candidate_x,
+                                               std::vector< std::vector<int>> &candidate_y){
 
     if (img_bird_eye_binary_.empty()) {
         std::cout<<"error in GetCandidateBySlidingWindows: img_bird_eye_binary_ is empty "<<std::endl;
@@ -430,7 +443,7 @@ int LaneDetector::GetCandidateBySlidingWindows(const std::vector<int> center_poi
         cv::imshow("windows_img",windows_img);
     }//if
     if (save_flag_) {
-        cv::imwrite("lane_windows_img.bmp", windows_img);
+        cv::imwrite("src/image_lane_detector/result/lane_windows_img.bmp", windows_img);
     }
 
 }//function GetCandidateBySlidingWindows
@@ -438,7 +451,7 @@ int LaneDetector::GetCandidateBySlidingWindows(const std::vector<int> center_poi
 
 int LaneDetector::GetLaneLines(const int lane_line_min_pixels){
     std::vector<int> line_center_points;
-    GetLaneLineCenter(10, 100, 50, 600, line_center_points);
+    GetLaneLineCenter(20, 100, 100, 500, line_center_points);
 
     std::vector< std::vector<int>> candidate_x;
     std::vector< std::vector<int>> candidate_y;
@@ -461,8 +474,7 @@ int LaneDetector::GetLaneLines(const int lane_line_min_pixels){
             std::vector<double> tmp_factors;
             LaneLine tmp_line;
             tmp_line.score = (candidate_y[line_index].size() - 3000.0) / 3000.0;
-            fitter.polyfit(candidate_y[line_index], candidate_x[line_index], 2, true);
-            fitter.getFactor(tmp_factors);
+
             int yellow_points_num = 0;
             for (int point_index = 0; point_index < candidate_x[line_index].size(); ++point_index)
             {
@@ -475,45 +487,107 @@ int LaneDetector::GetLaneLines(const int lane_line_min_pixels){
             else
                 tmp_line.color = LaneLine::WHITE;
 
-            GetLaneLineTypeAndRange(candidate_y[line_index],tmp_line);
+            GetLaneLineTypeAndRange(candidate_x[line_index], candidate_y[line_index], tmp_line);
             tmp_line.id = line_index;
+
+            fitter.polyfit(candidate_y[line_index], candidate_x[line_index], 2, true);
+            fitter.getFactor(tmp_factors);
             tmp_line.lines_factors = tmp_factors;
+
             lane_lines_.push_back(tmp_line);
         }//if
     }//for line_index
 
 }//GetLaneLines
 
-int LaneDetector::GetLaneLineTypeAndRange(std::vector<int> candidate_y, LaneLine &lane_line){
+int LaneDetector::GetLaneLineTypeAndRange(std::vector<int> candidate_x,
+                                          std::vector<int> candidate_y,
+                                          LaneLine &lane_line){
     if(candidate_y.empty()){
         std::cout<<"error in GetLaneLinesType: candidate_y is empty"<<std::endl;
         return false;
+    }
+    if(candidate_x.size() != candidate_y.size()){
+        std::cout<<"error in GetLaneLinesType: "<<std::endl;
     }
     std::set<int> row_record;
     for (int point_index = 0; point_index < candidate_y.size(); ++point_index)
     {
         row_record.insert(candidate_y[point_index]);
     }
+
     std::set<int>::iterator tmp_it =row_record.end();
     tmp_it--;
     int candidata_y_max = *tmp_it;
     int candidata_y_min = *(row_record.begin());
 
-    if(row_record.size() * 2 > (candidata_y_max - candidata_y_min)){
+    if(row_record.size() * 1.5 > (candidata_y_max - candidata_y_min)){
         lane_line.type = LaneLine::SOLID;
     }
     else{
         lane_line.type = LaneLine::DASHED;
     }
-
     lane_line.start_row = candidata_y_max;
     lane_line.end_row = candidata_y_min;
+    int tmp_end = 10000;
+    int zero_num = 0;
+    for(int tmp = candidata_y_max; tmp > candidata_y_min; --tmp){
+        if(row_record.count(tmp) == 0){
+            zero_num++;
+        }
+        else{
+            zero_num = 0;
+        }
+        if(zero_num > 150)
+        {
+            tmp_end = tmp;
+            lane_line.end_row = tmp + 100;
+            break;
+        }
+        //std::cout<<zero_num<<std::endl;
+    }
+
+    if(tmp_end < 10000){
+        std::vector<int>::iterator tmp_it_x = candidate_x.begin();
+        std::vector<int>::iterator tmp_it_y = candidate_y.begin();
+        for(; tmp_it_x != candidate_x.end() && tmp_it_y != candidate_y.end();){
+            if(*(tmp_it_y) < tmp_end){
+                candidate_x.erase(tmp_it_x);
+                candidate_y.erase(tmp_it_y);
+            }
+            else{
+                tmp_it_x++;
+                tmp_it_y++;
+            }
+        }
+    }
+
+    if(stop_line_.detected_flag == true){
+        std::vector<int>::iterator tmp_it_x = candidate_x.begin();
+        std::vector<int>::iterator tmp_it_y = candidate_y.begin();
+        for(; tmp_it_x != candidate_x.end() && tmp_it_y != candidate_y.end();){
+            if((*tmp_it_y) <= stop_line_.line_factors[1] * (*tmp_it_x) + stop_line_.line_factors[0]){
+                lane_line.end_row = (*tmp_it_y);
+                break;
+            }
+            else{
+                tmp_it_x++;
+                tmp_it_y++;
+            }
+        }
+        while(tmp_it_x != candidate_x.end() && tmp_it_y != candidate_y.end()){
+            candidate_x.erase(tmp_it_x);
+            candidate_y.erase(tmp_it_y);
+        }
+    }
+
+
     return true;
-
-
 }//GetLaneLinesType
 
-int LaneDetector::CalculateCurvature(const std::vector<double> factors, const int point_row, double &curvature){
+int LaneDetector::CalculateCurvature(const std::vector<double> factors,
+                                     const int point_row,
+                                     double &curvature){
     if (factors.size() != 3) {
         return false;
     }//if
@@ -521,7 +595,8 @@ int LaneDetector::CalculateCurvature(const std::vector<double> factors, const in
     return true;
 }//CalculateCurvature
 
-int LaneDetector::GetLane(const int min_lane_width,const int max_lane_width){
+int LaneDetector::GetLane(const int min_lane_width,
+                          const int max_lane_width){
     if (lane_lines_.empty()) {
         return false;
     }
@@ -535,47 +610,50 @@ int LaneDetector::GetLane(const int min_lane_width,const int max_lane_width){
             int line_bottom_x = pow(img_bird_eye_.rows, 2) * lane_lines_[line_index].lines_factors[2] + img_bird_eye_.rows * lane_lines_[line_index].lines_factors[1] + lane_lines_[line_index].lines_factors[0];
             int compared_line_bottom_x = pow(img_bird_eye_.rows, 2) * lane_lines_[compared_line_index].lines_factors[2] + img_bird_eye_.rows* lane_lines_[compared_line_index].lines_factors[1] + lane_lines_[compared_line_index].lines_factors[0];
             Lane tmp_lane;
-if (//line_top_x - compared_line_top_x > min_lane_width && line_top_x - compared_line_top_x < max_lane_width &&
-    line_center_x - compared_line_center_x > min_lane_width && line_center_x - compared_line_center_x < max_lane_width &&
-    line_bottom_x - compared_line_bottom_x > min_lane_width && line_bottom_x - compared_line_bottom_x < max_lane_width) {
-    tmp_lane.left_line = lane_lines_[compared_line_index];
-    tmp_lane.right_line = lane_lines_[line_index];
-    lanes_.push_back(tmp_lane);
-}//if
-else if (//compared_line_top_x - line_top_x > min_lane_width && compared_line_top_x - line_top_x < max_lane_width &&
-    compared_line_center_x - line_center_x > min_lane_width && compared_line_center_x - line_center_x < max_lane_width &&
-    compared_line_bottom_x - line_bottom_x > min_lane_width && compared_line_bottom_x - line_bottom_x < max_lane_width) {
-    tmp_lane.left_line = lane_lines_[line_index];
-    tmp_lane.right_line = lane_lines_[compared_line_index];
-    lanes_.push_back(tmp_lane);
-}//else if
-    }//for line_index
+            if (//line_top_x - compared_line_top_x > min_lane_width && line_top_x - compared_line_top_x < max_lane_width &&
+                    line_center_x - compared_line_center_x > min_lane_width && line_center_x - compared_line_center_x < max_lane_width &&
+                    line_bottom_x - compared_line_bottom_x > min_lane_width && line_bottom_x - compared_line_bottom_x < max_lane_width) {
+                tmp_lane.left_line = lane_lines_[compared_line_index];
+                tmp_lane.right_line = lane_lines_[line_index];
+                lanes_.push_back(tmp_lane);
+            }//if
+            else if (//compared_line_top_x - line_top_x > min_lane_width && compared_line_top_x - line_top_x < max_lane_width &&
+                     compared_line_center_x - line_center_x > min_lane_width && compared_line_center_x - line_center_x < max_lane_width &&
+                     compared_line_bottom_x - line_bottom_x > min_lane_width && compared_line_bottom_x - line_bottom_x < max_lane_width) {
+                tmp_lane.left_line = lane_lines_[line_index];
+                tmp_lane.right_line = lane_lines_[compared_line_index];
+                lanes_.push_back(tmp_lane);
+            }//else if
+        }//for line_index
 
     for (int lane_index = 0; lane_index < lanes_.size(); ++lane_index) {
         if (lanes_[lane_index].left_line.type == LaneLine::DASHED ||
-            lanes_[lane_index].left_line.type == LaneLine::DASHED_DASHED ||
-            lanes_[lane_index].left_line.type == LaneLine::DASHED_SOLID) {
+                lanes_[lane_index].left_line.type == LaneLine::DASHED_DASHED ||
+                lanes_[lane_index].left_line.type == LaneLine::DASHED_SOLID) {
             lanes_[lane_index].left_change_type = Lane::PERMIT;
         }//if
         else {
             lanes_[lane_index].left_change_type = Lane::REJECT;
         }//else
         if (lanes_[lane_index].right_line.type == LaneLine::DASHED ||
-            lanes_[lane_index].right_line.type == LaneLine::DASHED_DASHED ||
-            lanes_[lane_index].right_line.type == LaneLine::DASHED_SOLID) {
+                lanes_[lane_index].right_line.type == LaneLine::DASHED_DASHED ||
+                lanes_[lane_index].right_line.type == LaneLine::DASHED_SOLID) {
             lanes_[lane_index].right_change_type = Lane::PERMIT;
         }//if
         else {
             lanes_[lane_index].right_change_type = Lane::REJECT;
         }//else
-        lanes_[lane_index].center = (lanes_[lane_index].left_line.lines_factors[0] + lanes_[lane_index].right_line.lines_factors[0]) / 2;
+        lanes_[lane_index].center = (pow(img_bird_eye_.rows, 2) * lanes_[lane_index].left_line.lines_factors[2] + img_bird_eye_.rows * lanes_[lane_index].left_line.lines_factors[1] + lanes_[lane_index].left_line.lines_factors[0] +
+               pow(img_bird_eye_.rows, 2) * lanes_[lane_index].right_line.lines_factors[2] + img_bird_eye_.rows * lanes_[lane_index].right_line.lines_factors[1] + lanes_[lane_index].right_line.lines_factors[0]) / 2;
     }// for lane_index
     return true;
 }// GetLane
 
-int LaneDetector::TrackLane(const int min_lane_width, const int max_lane_width) {
+int LaneDetector::TrackLane(const int min_lane_width,
+                            const int max_lane_width) {
     if (lanes_.empty()) {
         for (int index = 0; index < tracking_lanes_.size(); ++index) {
+            tracking_lanes_[index].tracking = false;
             tracking_lanes_[index].score--;
         }
         std::vector<Lane>::iterator it;
@@ -607,7 +685,7 @@ int LaneDetector::TrackLane(const int min_lane_width, const int max_lane_width) 
                 for (int compared_index = index + 1; compared_index < lanes_.size(); ++compared_index) {
                     if (used_index.count(compared_index) == 0) {
                         if (lanes_[compared_index].center - lanes_[index].center > min_lane_width &&
-                            lanes_[compared_index].center - lanes_[index].center < max_lane_width) {
+                                lanes_[compared_index].center - lanes_[index].center < max_lane_width) {
                             lanes_index.push_back(compared_index);
                         }//if
 
@@ -621,7 +699,7 @@ int LaneDetector::TrackLane(const int min_lane_width, const int max_lane_width) 
             for (int lane_index = 0; lane_index < lanes_.size(); ++lane_index) {
                 tracking_lanes_.push_back(lanes_[lane_index]);
                 tracking_lanes_[lane_index].score = 1;
-                tracking_lanes_[lane_index].id = lane_index;
+                tracking_lanes_[lane_index].id = last_lane_id--;
             }//for lane_index
         }
         else {
@@ -635,7 +713,7 @@ int LaneDetector::TrackLane(const int min_lane_width, const int max_lane_width) 
             for (int lane_index = 0; lane_index < combined_lanes_index[max_index].size(); ++lane_index) {
                 tracking_lanes_.push_back(lanes_[combined_lanes_index[max_index][lane_index]]);
                 tracking_lanes_[lane_index].score = 1;
-                tracking_lanes_[lane_index].id = lane_index;
+                tracking_lanes_[lane_index].id = last_lane_id--;
             }//for lane_index
         }
     }//if empty
@@ -648,21 +726,16 @@ int LaneDetector::TrackLane(const int min_lane_width, const int max_lane_width) 
             std::vector<Lane>::iterator it = find(tracking_lanes_.begin(), tracking_lanes_.end(), lanes_[lane_index]);
             if (it == tracking_lanes_.end()) {
                 if (lanes_[lane_index].center - (*(it - 1)).center > min_lane_width &&
-                    lanes_[lane_index].center - (*(it - 1)).center < max_lane_width){
+                        lanes_[lane_index].center - (*(it - 1)).center < max_lane_width){
                     lanes_[lane_index].score = 1;
-                    lanes_[lane_index].id = tracking_lanes_.size();
+                    lanes_[lane_index].id = last_lane_id--;
                     tracking_lanes_.push_back(lanes_[lane_index]);
-
                 }//if
                 else if (-lanes_[lane_index].center +(*tracking_lanes_.begin()).center > min_lane_width &&
-                    -lanes_[lane_index].center + (*tracking_lanes_.begin()).center < max_lane_width) {
-                    for (int index = 0; index < tracking_lanes_.size(); ++index) {
-                        tracking_lanes_[index].id += 1;
-                    }
+                         -lanes_[lane_index].center + (*tracking_lanes_.begin()).center < max_lane_width) {
                     lanes_[lane_index].score = 1;
-                    lanes_[lane_index].id = 0;
+                    lanes_[lane_index].id = last_lane_id--;;
                     tracking_lanes_.push_back(lanes_[lane_index]);
-
                 }
             }
 
@@ -688,8 +761,35 @@ int LaneDetector::TrackLane(const int min_lane_width, const int max_lane_width) 
             }
         }
     }
+
+    int tmp_min = 10000,tmp_min_index = -1;
+    for(int index = 0; index < tracking_lanes_.size(); ++index) {
+        if(abs(tracking_lanes_[index].center - vehicle_center_.x) < tmp_min){
+            tmp_min =abs(vehicle_center_.x - tracking_lanes_[index].center);
+            tmp_min_index = index;
+        }
+        if(stop_line_.detected_flag == true){
+            tracking_lanes_[index].distanceToStop = (vehicle_center_.y - cv::max(tracking_lanes_[index].left_line.end_row, tracking_lanes_[index].right_line.end_row)) * pixel_to_ground_y_;
+        }
+        else{
+            tracking_lanes_[index].distanceToStop = -1;
+        }
+    }
+    if(tmp_min_index != -1){
+        for(int index = 0; index < tracking_lanes_.size(); ++index) {
+            tracking_lanes_[index].offsetIndex = index - tmp_min_index;
+            tracking_lanes_[index].offset = (vehicle_center_.x - tracking_lanes_[index].center) * pixel_to_ground_x_;
+            tracking_lanes_[index].dirDiff = atan(2 * img_bird_eye_.rows * tracking_lanes_[index].left_line.lines_factors[2] + tracking_lanes_[index].left_line.lines_factors[1]);
+        }
+    }
+
+
+    if(debug_flag_){
+        std::cout << tracking_lanes_.size() << " lanes detected;" << std::endl;
+    }
+
     return true;
-}
+}//TrackLane
 
 int LaneDetector::LaneLinesShow(){
     if (img_source_.empty()) {
@@ -702,7 +802,7 @@ int LaneDetector::LaneLinesShow(){
     std::set<int> drawID;
 
     for (int lane_index = 0; lane_index < tracking_lanes_.size(); ++lane_index) {
-        if (tracking_lanes_[lane_index].score >= 3) {
+        if (tracking_lanes_[lane_index].score >= 3 && tracking_lanes_[lane_index].tracking) {
             if (drawID.count(tracking_lanes_[lane_index].left_line.id) == 0) {
                 drawID.insert(tracking_lanes_[lane_index].left_line.id);
                 LineShow(tracking_lanes_[lane_index].left_line);
@@ -712,31 +812,31 @@ int LaneDetector::LaneLinesShow(){
                 LineShow(tracking_lanes_[lane_index].right_line);
             }
         }
-
     }
     StopLineShow();
     cv::warpPerspective(img_display_, img_display_, inverse_perspective_matrix_, img_display_.size());
     cv::addWeighted(img_source_, 1, img_display_, 1, 0, img_display_);
     cv::imshow("result", img_display_);
     cvWaitKey(1);
-}
+    return true;
+}//LaneLinesShow
 
 int LaneDetector::LineShow(const LaneLine line){
     if (line.lines_factors.size() != 3) {
+        std::cout<<"error in LineShow: the line factors are not good."<<std::endl;
         return false;
     }
-
     cv::Vec3b tmp_draw_color = cv::Vec3b(0, 0, 255);
-    for (int row = 0; row < img_display_.rows; row++){
+    for (int row = img_display_.rows; row > line.end_row; row--){
 
-        int col = line.lines_factors[2] * row * row + line.lines_factors[1] * row + line.lines_factors[0];
-        int tmp_flag = 1;
-        if (stop_line_.lines_factors.size() == 3) {
-            if (row < stop_line_.lines_factors[2] * col * col + stop_line_.lines_factors[1] * col + stop_line_.lines_factors[0]) {
-                tmp_flag = 0;
-            }
-        }
-        if (tmp_flag && col >= 20 && col < img_display_.cols - 20){
+        int col =  line.lines_factors[2] * row * row + line.lines_factors[1] * row + line.lines_factors[0];
+//        int tmp_flag = 1;
+//        if (stop_line_.line_factors.size() == 2) {
+//            if (row <  stop_line_.line_factors[1] * col + stop_line_.line_factors[0]) {
+//                tmp_flag = 0;
+//            }//if row
+//        }// if
+        if (col >= 20 && col < img_display_.cols - 20){
             for (int tmp = col - 20; tmp < col + 20; tmp++){
                 img_display_.at<cv::Vec3b>(row, tmp) = tmp_draw_color;
             }//for tmp
@@ -746,50 +846,69 @@ int LaneDetector::LineShow(const LaneLine line){
 }//LineShow
 
 int LaneDetector::StopLineShow() {
-    if (stop_line_.lines_factors.size() != 3) {
+    if (stop_line_.line_factors.size() != 2) {
         return false;
     }
     cv::Vec3b tmp_draw_color = cv::Vec3b(0, 0, 255);
     for (int col = 0; col < img_display_.cols; col++) {
-        int row = stop_line_.lines_factors[2] * col * col + stop_line_.lines_factors[1] * col + stop_line_.lines_factors[0];
+        int row = stop_line_.line_factors[1] * col + stop_line_.line_factors[0];
         if (row >= 20 && row < img_display_.rows - 20) {
             for (int tmp = row - 20; tmp < row + 20; tmp++) {
                 img_display_.at<cv::Vec3b>(tmp, col) = tmp_draw_color;
             }//for tmp
         }//if
     }//for row
+    return true;
 
 }//LineShow
 
-int LaneDetector::PublishRoadMsg(local_messages::Road road_msg){
+int LaneDetector::PublishRoadMsg(local_messages::Road &road_msg){
     local_messages::Lane lane_msg;
     for(int index = 0; index < tracking_lanes_.size() ; ++index){
-        lane_msg.id = tracking_lanes_[index].id;
-        lane_msg.relation = local_messages::Lane::NEAR;
-        lane_msg.preferred = false;
-        lane_msg.offsetIndex = tracking_lanes_[index].offsetIndex;
-        lane_msg.offset = tracking_lanes_[index].offset;
-        lane_msg.dirDiff = tracking_lanes_[index].dirDiff;
-        lane_msg.startPointIndex = 0;
-        if(index >0){
-            lane_msg.leftLaneId = tracking_lanes_[index - 1].id;
+        if(tracking_lanes_[index].score > 3){
+            lane_msg.id = tracking_lanes_[index].id;
+            lane_msg.relation = local_messages::Lane::NEAR;
+            lane_msg.preferred = false;
+            lane_msg.offsetIndex = tracking_lanes_[index].offsetIndex;
+            lane_msg.offset = tracking_lanes_[index].offset;
+            lane_msg.dirDiff = tracking_lanes_[index].dirDiff;
+            lane_msg.distanceToStop = tracking_lanes_[index].distanceToStop;
+            lane_msg.startPointIndex = 0;
+            if(index >0){
+                lane_msg.leftLaneId = tracking_lanes_[index - 1].id;
+            }
+            if(index < tracking_lanes_.size() -1){
+                lane_msg.rightLaneId = tracking_lanes_[index + 1].id;
+            }
+            if(tracking_lanes_[index].left_change_type == vecan::perception::Lane::PERMIT){
+                lane_msg.canChangeLeft = true;
+            }
+            else{
+                lane_msg.canChangeLeft = false;
+            }
+            if(tracking_lanes_[index].right_change_type == vecan::perception::Lane::PERMIT){
+                lane_msg.canChangeRight = true;
+            }
+            else{
+                lane_msg.canChangeRight = false;
+            }
+
+            geometry_msgs::Point32 tmp_point;
+            int tmp_row = 0, tmp_col_left = 0, tmp_col_right = 0;
+            float tmp_col = 0;
+            int tmp_row_start = cv::min(tracking_lanes_[index].left_line.start_row,tracking_lanes_[index].right_line.start_row);
+            int tmp_row_end = cv::max(tracking_lanes_[index].left_line.end_row,tracking_lanes_[index].right_line.end_row);
+            for (tmp_row = tmp_row_start; tmp_row > tmp_row_end; tmp_row--){
+                tmp_col_left = tracking_lanes_[index].left_line.lines_factors[2] * tmp_row * tmp_row + tracking_lanes_[index].left_line.lines_factors[1] * tmp_row +tracking_lanes_[index].left_line.lines_factors[0];
+                tmp_col_right = tracking_lanes_[index].right_line.lines_factors[2] * tmp_row * tmp_row + tracking_lanes_[index].right_line.lines_factors[1] * tmp_row +tracking_lanes_[index].right_line.lines_factors[0];
+                tmp_col = (tmp_col_left + tmp_col_right)/2.0;
+                tmp_point.x = (tmp_col - vehicle_center_.x) * pixel_to_ground_x_;
+                tmp_point.y = (tmp_row - vehicle_center_.y) * pixel_to_ground_y_;
+                lane_msg.points.push_back(tmp_point);
+            }
+            road_msg.lanes.push_back(lane_msg);
         }
-        if(index < tracking_lanes_.size() -1){
-            lane_msg.rightLaneId = tracking_lanes_[index + 1].id;
-        }
-        if(tracking_lanes_[index].left_change_type == vecan::perception::Lane::PERMIT){
-            lane_msg.canChangeLeft = true;
-        }
-        else{
-            lane_msg.canChangeLeft = false;
-        }
-        if(tracking_lanes_[index].right_change_type == vecan::perception::Lane::PERMIT){
-            lane_msg.canChangeRight = true;
-        }
-        else{
-            lane_msg.canChangeRight = false;
-        }
-        road_msg.lanes.push_back(lane_msg);
+
     }
 
 }//PublishRoadMsg

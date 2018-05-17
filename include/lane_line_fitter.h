@@ -28,7 +28,7 @@ namespace vecan {
         /// \brief 直线拟合-一元回归,拟合的结果可以使用getFactor获取，或者使用getSlope获取斜率，getIntercept获取截距
         /// \param x 观察值的x
         /// \param y 观察值的y
-        /// \param isSaveFitYs 拟合后的数据是否保存，默认否
+        /// \param isSaveFitYs 拟合后的数据是否保存，默认否q
         ///
         template<typename T>
         bool linearFit(const std::vector<T>& x, const std::vector<T>& y, bool isSaveFitYs = false)

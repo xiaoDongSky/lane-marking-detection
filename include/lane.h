@@ -54,6 +54,9 @@ struct Lane {
     // This value is negative when the lane is tilt to the left of the vehicle, positive when right.
     float dirDiff;
 
+    // Direct distance to the next stop line.
+    float distanceToStop;
+
 	//find ==
 	bool operator==(const Lane& objstruct) const {
 		return (objstruct.center >= center - 50) && (objstruct.center <= center + 50);

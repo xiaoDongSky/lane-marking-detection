@@ -17,8 +17,7 @@
 #include <iostream>
 #include <string>
 
-#include <local_messages/LaneMarker.h>
-#include <local_messages/LaneMarkers.h>
+#include <local_messages/Road.h>
 
 #include "../include/lane_detector.h"
 #include "../include/lane.h"
@@ -42,15 +41,19 @@ int main(int argc, char **argv) {
     image_transport::ImageTransport it(img_handle);
     image_transport::Subscriber camera_sub = it.subscribe("camera", 1, imageCallback);
 
+    ros::NodeHandle road_handle;
+    ros::Publisher road_pub = road_handle.advertise<local_messages::Road>("test", 2000);
+
+    //sleep(5);
     //off-line pictures path
     std::string pictures_path_prefix = "/var/local/vu/image_data/lane_image1/";
     std::string pictures_path;
-    int frame_index = 0;
+    int frame_index = 250;
     char postfix_buffer[20];
 
-    vecan::perception::LaneDetector lane_detector(true,true,false);
+    vecan::perception::LaneDetector lane_detector(true,false,false);
 
-    cv::Mat img_output;
+    local_messages::Road road_msg;
 
     bool on_line = false;
     while (ros::ok()) {
@@ -64,10 +67,8 @@ int main(int argc, char **argv) {
         }//else
         std::cout << "frame: " << frame_index << "    ";
         lane_detector.DetectLane(image_source);
-        std::vector<vecan::perception::Lane> result;
-        lane_detector.GetDetectionResult(result, img_output);
-
-        std::cout << result.size() << " lanes detected;" << std::endl;
+        lane_detector.PublishRoadMsg(road_msg);
+        road_pub.publish(road_msg);
         frame_index++;
     }
 

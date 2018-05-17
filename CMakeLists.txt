@@ -33,13 +33,13 @@ include_directories(
 )
 
 
-add_executable(${PROJECT_NAME}_node
-    src/image_lane_detector_node.cpp
+add_executable(${PROJECT_NAME}
+    src/image_lane_detector.cpp
     src/lane_detector.cpp
 )
 
 #
-target_link_libraries(${PROJECT_NAME}_node
+target_link_libraries(${PROJECT_NAME}
   ${catkin_LIBRARIES}
   ${OpenCV_LIBS}
 )

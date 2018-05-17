@@ -28,7 +28,7 @@ public:
     LaneDetector(const bool show_flag, const bool debug_flag, const bool save_flag);
     int DetectLane(const cv::Mat frame);
 	int GetDetectionResult(std::vector<Lane> &result, cv::Mat &img);
-    int PublishRoadMsg(local_messages::Road road_msg);
+    int PublishRoadMsg(local_messages::Road &road_msg);
 
 private:
 
@@ -104,7 +104,7 @@ private:
 
     int GetLaneLines(const int lane_line_min_pixels);
 
-    static int GetLaneLineTypeAndRange(std::vector<int> candidate_y, LaneLine &lane_line);
+    int GetLaneLineTypeAndRange(std::vector<int> candidate_x, std::vector<int> candidate_y, LaneLine &lane_line);
 
 	static int CalculateCurvature(const std::vector<double> factors,const int point_row, double &curvature);
 
@@ -130,9 +130,15 @@ private:
 	cv::Mat perspective_matrix_;
 	cv::Mat inverse_perspective_matrix_;
 
+    cv::Point2f vehicle_center_;
+    double pixel_to_ground_x_;
+    double pixel_to_ground_y_;
+    int last_lane_id;
+
     bool debug_flag_;
     bool show_flag_;
     bool save_flag_;
+
 }; //struct Lane
 } //namespace perception
 } //namespace vecan
