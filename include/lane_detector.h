@@ -95,16 +95,17 @@ private:
 		const int window_min_pixels,
 		const int stop_line_min_pixels);
 
-	int GetCandidateBySlidingWindows(const std::vector<int> center_points, 
-		                             const int number_windows,
-		                             const int window_half_width,
-		                             const int window_min_pixels,
-                                     std::vector<std::vector<int> > &candidate_x,
-                                     std::vector<std::vector<int> > &candidate_y);
+    int GetCandidateBySlidingWindows(const std::vector<int> center_points,
+                                     const int number_windows,
+                                     const int window_half_width,
+                                     const int window_min_pixels,
+                                     std::vector<std::vector<int> > &candidate_x, std::vector<std::vector<int> > &candidate_y);
 
     int GetLaneLines(const int lane_line_min_pixels);
 
-    int GetLaneLineTypeAndRange(std::vector<int> candidate_x, std::vector<int> candidate_y, LaneLine &lane_line);
+    int GetLaneLineTypeAndRange(std::vector<int> candidate_x,
+                                std::vector<int> candidate_y,
+                                LaneLine &lane_line);
 
 	static int CalculateCurvature(const std::vector<double> factors,const int point_row, double &curvature);
 
@@ -129,6 +130,7 @@ private:
 	cv::Mat img_display_;
 	cv::Mat perspective_matrix_;
 	cv::Mat inverse_perspective_matrix_;
+    cv::Mat img_windows_;
 
     cv::Point2f vehicle_center_;
     double pixel_to_ground_x_;

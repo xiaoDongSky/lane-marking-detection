@@ -21,7 +21,7 @@
 
 #include "../include/lane_detector.h"
 #include "../include/lane.h"
-
+#include "../include/launch_para.h"
 
 //global image
 cv::Mat image_source;
@@ -37,34 +37,40 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg){
 
 int main(int argc, char **argv) {
     ros::init(argc, argv, "image_lane_detector");
+    /*----------------------------------------------------*/
+    vecan::perception::LaunchPara launch_para;
+    vecan::perception::GetParametersFromLaunch(launch_para);
+
+    /*----------------------------------------------------*/
     ros::NodeHandle img_handle;
     image_transport::ImageTransport it(img_handle);
-    image_transport::Subscriber camera_sub = it.subscribe("camera", 1, imageCallback);
+    image_transport::Subscriber camera_sub = it.subscribe(launch_para.image_topic_name, 1, imageCallback);
 
     ros::NodeHandle road_handle;
-    ros::Publisher road_pub = road_handle.advertise<local_messages::Road>("test", 2000);
+    ros::Publisher road_pub = road_handle.advertise<local_messages::Road>(launch_para.road_topic_name, 10);
 
-    //sleep(5);
-    //off-line pictures path
-    std::string pictures_path_prefix = "/var/local/vu/image_data/lane_image1/";
-    std::string pictures_path;
-    int frame_index = 250;
-    char postfix_buffer[20];
-
-    vecan::perception::LaneDetector lane_detector(true,false,false);
-
+    /*----------------------------------------------------*/
+    vecan::perception::LaneDetector lane_detector(launch_para.show_flag,launch_para.debug_flag,launch_para.save_flag);
     local_messages::Road road_msg;
 
-    bool on_line = false;
+    //off-line pictures path
+    std::string pictures_path_prefix = launch_para.pictures_path;
+    std::string pictures_path;
+    int frame_index = 1;
+    char postfix_buffer[20];
+
     while (ros::ok()) {
-        if(on_line){
+        if(launch_para.mode == "on-line"){
             ros::spinOnce();
         }//if on_line
-        else{
+        else if(launch_para.mode == "off-line"){
             sprintf(postfix_buffer, "%06d.bmp", frame_index);
             pictures_path = pictures_path_prefix + postfix_buffer;
             image_source = cv::imread(pictures_path);
         }//else
+        else{
+            ROS_INFO("mode error");
+        }
         std::cout << "frame: " << frame_index << "    ";
         lane_detector.DetectLane(image_source);
         lane_detector.PublishRoadMsg(road_msg);

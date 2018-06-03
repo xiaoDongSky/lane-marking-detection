@@ -9,6 +9,7 @@
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
+#include "opencv2/video/tracking.hpp"
 
 #include <algorithm>
 #include <numeric>
@@ -17,7 +18,7 @@
 
 #include "../include/lane_detector.h"
 #include "../include/lane_line_fitter.h"
-
+#include "../include/ransac.h"
 namespace vecan {
 namespace perception {
 
@@ -106,6 +107,7 @@ int LaneDetector::GetBinaryFromRules(const cv::Mat img_gray,
     }//for row
     return true;
 }//GetBinaryFromRules
+
 
 int LaneDetector::GetStopLineBinary(const cv::Mat img_gray,
                                     const int stop_line_width,
@@ -381,13 +383,12 @@ int LaneDetector::GetCandidateBySlidingWindows(const std::vector<int> center_poi
         std::cout<<"error in GetCandidateBySlidingWindows: img_bird_eye_binary_ is empty "<<std::endl;
         return false;
     }//if
-
-    std::vector<int> window_center = center_points;
-    cv::Mat windows_img;
     if (debug_flag_){
-        windows_img = img_bird_eye_binary_.clone();
-        cvtColor(windows_img, windows_img, cv::COLOR_GRAY2BGR);
+        img_windows_ = img_bird_eye_binary_.clone();
+        cvtColor(img_windows_, img_windows_, cv::COLOR_GRAY2BGR);
     }//if
+    std::vector<int> window_center = center_points;
+
 
     int window_height = floor(img_bird_eye_binary_.rows / number_windows);
     for (int line_index = 0; line_index < window_center.size(); line_index++) {
@@ -406,7 +407,7 @@ int LaneDetector::GetCandidateBySlidingWindows(const std::vector<int> center_poi
             window_x_low = cv::max(window_x_low, 0);
 
             if (debug_flag_) {
-                cv::rectangle(windows_img, cv::Point(window_x_low, window_y_low), cv::Point(window_x_high, window_y_high), cv::Scalar(0, 255, 0), 2);
+                cv::rectangle(img_windows_, cv::Point(window_x_low, window_y_low), cv::Point(window_x_high, window_y_high), cv::Scalar(0, 255, 0), 2);
             }//if
 
             std::vector<int> window_inds_x;
@@ -422,6 +423,7 @@ int LaneDetector::GetCandidateBySlidingWindows(const std::vector<int> center_poi
             if (window_inds_x.size() > window_min_pixels) {
                 lane_lines_points_x.insert(lane_lines_points_x.end(), window_inds_x.begin(), window_inds_x.end());
                 lane_lines_points_y.insert(lane_lines_points_y.end(), window_inds_y.begin(), window_inds_y.end());
+
                 int tmp_center = std::accumulate(window_inds_x.begin(), window_inds_x.end(), 0.0) / window_inds_x.size();
                 if (tmp_last_window_flag) {
                     last_offset = tmp_center - window_center[line_index];
@@ -439,12 +441,7 @@ int LaneDetector::GetCandidateBySlidingWindows(const std::vector<int> center_poi
         candidate_y.push_back(lane_lines_points_y);
     }//for line_index
 
-    if (debug_flag_) {
-        cv::imshow("windows_img",windows_img);
-    }//if
-    if (save_flag_) {
-        cv::imwrite("src/image_lane_detector/result/lane_windows_img.bmp", windows_img);
-    }
+
 
 }//function GetCandidateBySlidingWindows
 
@@ -469,6 +466,7 @@ int LaneDetector::GetLaneLines(const int lane_line_min_pixels){
     GetBinaryFromHSV(img_source_, HSV_yello_low, HSV_yello_high, img_HSV);
 
     Fit fitter;
+    RansacCurve ransac_fitter;
     for (int line_index = 0; line_index < candidate_x.size(); ++line_index) {
         if (candidate_x[line_index].size() > lane_line_min_pixels) {
             std::vector<double> tmp_factors;
@@ -491,12 +489,36 @@ int LaneDetector::GetLaneLines(const int lane_line_min_pixels){
             tmp_line.id = line_index;
 
             fitter.polyfit(candidate_y[line_index], candidate_x[line_index], 2, true);
+            tmp_line.ransac_lines_factors = ransac_fitter.GetBestModel(candidate_y[line_index], candidate_x[line_index]);
             fitter.getFactor(tmp_factors);
             tmp_line.lines_factors = tmp_factors;
-
+            tmp_line.lines_factors[0] = tmp_line.ransac_lines_factors[2];
+            tmp_line.lines_factors[1] = tmp_line.ransac_lines_factors[1];
+            tmp_line.lines_factors[2] = tmp_line.ransac_lines_factors[0];
             lane_lines_.push_back(tmp_line);
+
+            if (debug_flag_) {
+                for(int row = 0; row < img_windows_.rows;++row){
+                    int tmp_col1 = tmp_line.ransac_lines_factors[0] * row *row + tmp_line.ransac_lines_factors[1] * row + tmp_line.ransac_lines_factors[2];
+                    int tmp_col2 = tmp_line.lines_factors[2] * row *row + tmp_line.lines_factors[1] * row + tmp_line.lines_factors[0];
+                    if(tmp_col1 >= 0 && tmp_col1 < img_windows_.cols){
+                        img_windows_.at<cv::Vec3b>(row,tmp_col1) = cv::Vec3b(255,0,0);
+                    }
+                    if(tmp_col2 >= 0 && tmp_col2 < img_windows_.cols){
+                        img_windows_.at<cv::Vec3b>(row,tmp_col2) = cv::Vec3b(0,0,255);
+                    }
+                }
+            }//if
+
         }//if
     }//for line_index
+
+    if (debug_flag_) {
+        cv::imshow("windows_img",img_windows_);
+    }//if
+    if (save_flag_) {
+        cv::imwrite("src/image_lane_detector/result/lane_windows_img.bmp", img_windows_);
+    }
 
 }//GetLaneLines
 
@@ -610,6 +632,7 @@ int LaneDetector::GetLane(const int min_lane_width,
             int line_bottom_x = pow(img_bird_eye_.rows, 2) * lane_lines_[line_index].lines_factors[2] + img_bird_eye_.rows * lane_lines_[line_index].lines_factors[1] + lane_lines_[line_index].lines_factors[0];
             int compared_line_bottom_x = pow(img_bird_eye_.rows, 2) * lane_lines_[compared_line_index].lines_factors[2] + img_bird_eye_.rows* lane_lines_[compared_line_index].lines_factors[1] + lane_lines_[compared_line_index].lines_factors[0];
             Lane tmp_lane;
+
             if (//line_top_x - compared_line_top_x > min_lane_width && line_top_x - compared_line_top_x < max_lane_width &&
                     line_center_x - compared_line_center_x > min_lane_width && line_center_x - compared_line_center_x < max_lane_width &&
                     line_bottom_x - compared_line_bottom_x > min_lane_width && line_bottom_x - compared_line_bottom_x < max_lane_width) {

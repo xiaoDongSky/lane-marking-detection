@@ -42,6 +42,7 @@ struct LaneLine {
 	// The parameters of lane line function (parabola):
 	// col = lines_factors[2] * row^2 + line_factors[1] * row + line_factors[0]
 	std::vector<double> lines_factors;
+    std::vector<double> ransac_lines_factors;
 	// The color of the lane line;
 	LaneLineColor color;
 	// The type of the lane line;

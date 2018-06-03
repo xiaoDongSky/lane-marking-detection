@@ -36,6 +36,8 @@ include_directories(
 add_executable(${PROJECT_NAME}
     src/image_lane_detector.cpp
     src/lane_detector.cpp
+    src/ransac.cpp
+    src/launch_para.cpp
 )
 
 #

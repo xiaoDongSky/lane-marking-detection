@@ -1,0 +1,23 @@
+
+<launch>
+        <!-- arguments list -->
+        <arg name="mode" default="off-line"/>
+        <arg name="pictures_path" default="/var/local/vu/image_data/lane_image1/"/>
+        <arg name="image_topic_name" default="camera"/>
+        <arg name="road_topic_name" default="road_image"/>
+        <arg name="show_flag"  default="true"/>
+        <arg name="debug_flag" default="false"/>
+        <arg name="save_flag"  default="false"/>
+
+        <!-- Lane detector -->
+        <node pkg="image_lane_detector" name="image_lane_detector" type="image_lane_detector">
+                <param name="mode" type="str" value="$(arg mode)"/>
+                <param name="pictures_path" type="str" value="$(arg pictures_path)"/>
+                <param name="image_topic_name" type="str" value="$(arg image_topic_name)"/>
+                <param name="road_topic_name" type="str" value="$(arg road_topic_name)"/>
+                <param name="show_flag" type="bool" value="$(arg show_flag)"/>
+                <param name="debug_flag" type="bool" value="$(arg debug_flag)"/>
+                <param name="save_flag" type="bool" value="$(arg save_flag)"/>
+        </node>
+
+</launch>
