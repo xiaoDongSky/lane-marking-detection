@@ -10,6 +10,7 @@
 #define _Lane_detector_H_
 
 #include <opencv2/core/core.hpp>
+#include <opencv2/video/tracking.hpp>
 #include "lane_line.h"
 #include "lane.h"
 #include "stop_line.h"
@@ -33,12 +34,12 @@ public:
 private:
 
 	/**
-	* @brief: get binary from HSV color space
+    * @brief: get binary from HSV color space.
 	* @param [in]:  frame       The input image in BGR color space.
 	* @param [in]:  HSV_low     The lower limit of the HSV color space.
 	* @param [in]:  HSV_high    The higher limit of the HSV color space.
 	* @param [out]: binary_HSV  The result of binaryzation in HSV color space.
-	* @return true if binary successfully, otherwise return false
+    * @return true if binary successfully, otherwise return false.
 	*/
 	static int GetBinaryFromHSV(const cv::Mat frame,
 		                        const cv::Scalar HSV_low,
@@ -46,36 +47,53 @@ private:
 		                        cv::Mat &img_binary_HSV);
 
 	/**
-	* @brief: get binary from equalized gray-scale image
+    * @brief: get binary from equalized gray-scale image.
 	* @param [in]:  image_gray              The input image in gray-scale.
 	* @param [in]:  gray_threshold          The threshold of gray-scale.
 	* @param [out]: img_binary_equalized    The result of equalized gray-scale binaryzation.
-	* @return true if binary successfully, otherwise return false
+    * @return true if binary successfully, otherwise return false.
 	*/
 	static int GetBinaryFromEqualizedGrayscale(const cv::Mat img_gray,
 		                                       const int gray_threshold,
 		                                       cv::Mat &img_binary_equalized);
 
 	/**
-	* @brief: get binary from rules of lane-line
+    * @brief: get binary from gray-scale images according the width of lane.
 	* @param [in]:  image_gray              The input image in gray-scale.
 	* @param [in]:  lane_line_width         The width of lane-line.
 	* @param [in]:  difference_threshold    The threshold of difference between laneline and road.
 	* @param [out]: img_binary_rules        The result of rules based binaryzation.
-	* @return true if binary successfully, otherwise return false
+    * @return true if binary successfully, otherwise return false.
 	*/
 	static int GetBinaryFromRules(const cv::Mat img_gray,
 		                          const int lane_line_width,
 		                          const int difference_threshold,
 		                          cv::Mat &img_binary_rules);
 
-
+    /**
+    * @brief: get binary from source image.
+    * @param [in]:  frame_input             The source frame from camera in BGR color-space.
+    * @return true if binary successfully, otherwise return false.
+    */
 	int GetBinary(const cv::Mat frame_input);
 
+    /**
+    * @brief: get binary from gray-scale images according the width of lane.
+    * @param [in]:  image_gray              The input image in gray-scale.
+    * @param [in]:  stop_line_width         The width of stop line.
+    * @param [in]:  difference_threshold    The threshold of difference between stop-line and road.
+    * @return true if binary successfully, otherwise return false.
+    */
 	int GetStopLineBinary(const cv::Mat img_gray,
-		const int stop_line_width,
-		const int difference_threshold);
+                          const int stop_line_width,
+                          const int difference_threshold);
 
+    /**
+    * @brief: get binary from gray-scale images according the width of lane.
+    * @param [in]:  corners_source          The four corners in source image.
+    * @param [in]:  corners_trans           The width of lane-line.
+    * @return true if get persepective successfully, otherwise return false.
+    */
 	int GetPerspectiveMatrix(const std::vector<cv::Point2f> corners_source,
 		                     const std::vector<cv::Point2f> corners_trans);
 
@@ -87,13 +105,13 @@ private:
                           std::vector<int> &center_points) const;
 
 	int GetStopLineCenter(const int histogram_width,
-		const int histogram_min_pixels,
-		int &center_point) const;
+                          const int histogram_min_pixels,
+                          int &center_point) const;
 
-	int GetStopLine(const int number_windows,
-		const int window_half_width,
-		const int window_min_pixels,
-		const int stop_line_min_pixels);
+    int GetStopLine(const int number_windows,
+                    const int window_half_width,
+                    const int window_min_pixels,
+                    const int stop_line_min_pixels, const int stop_line_min_windows);
 
     int GetCandidateBySlidingWindows(const std::vector<int> center_points,
                                      const int number_windows,
@@ -107,15 +125,29 @@ private:
                                 std::vector<int> candidate_y,
                                 LaneLine &lane_line);
 
-	static int CalculateCurvature(const std::vector<double> factors,const int point_row, double &curvature);
+    static int CalculateCurvature(const std::vector<double> factors,
+                                  const int point_row,
+                                  double &curvature);
 
-	int GetLane(const int min_lane_width, const int max_lane_width);
+    int GetLane(const int min_lane_width,
+                const int max_lane_width);
 
 	int LaneLinesShow();
 	int LineShow(const LaneLine line);
 	int StopLineShow();
-	int TrackLane(const int min_lane_width, const int max_lane_width);
+    int TrackLane(const int min_lane_width,
+                  const int max_lane_width);
+    int kalman_filter_init(Lane &lane);
+    int kalman_filter_update(Lane &lane,
+                             std::vector<double> left_paramters,
+                             std::vector<double> right_paramters);
 
+
+    template<typename T> static int Calculatevariance(std::vector<T> data,
+                                                      double &average,
+                                                      double &variance);
+
+int DeleteBigConnectedRegion(cv::Mat img_gray, cv::Mat &img_output, const int rectangle_num, const int max_area_threshold);
 
 private:
 	StopLine stop_line_;
@@ -136,6 +168,8 @@ private:
     double pixel_to_ground_x_;
     double pixel_to_ground_y_;
     int last_lane_id;
+
+
 
     bool debug_flag_;
     bool show_flag_;

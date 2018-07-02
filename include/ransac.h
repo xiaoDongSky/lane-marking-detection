@@ -25,8 +25,11 @@ namespace vecan {
 namespace perception {
 class RansacCurve{
 public:
+    //Default constructor with default parameters
     RansacCurve();
+    //Constructor with the user-defined parameters
     RansacCurve(const int required_inliers_rate_, const int max_iterations, const double min_inliers_distance);
+    //The function to do a curve fitting by RANSAC
     std::vector<double> GetBestModel(const std::vector<int>& points_x, const std::vector<int>& points_y);
 private:
     static int get_random(int min, int max);

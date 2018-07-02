@@ -1,3 +1,4 @@
+
 /**
 * @copyright 2018 VeCaN Lab
 * @file lane_detector.cpp
@@ -33,13 +34,15 @@ LaneDetector::LaneDetector(const bool show_flag, const bool debug_flag, const bo
     pixel_to_ground_x_ = 1;
     pixel_to_ground_y_ = 1;
     last_lane_id = -1;
+
+
 }
 
 int LaneDetector::DetectLane(const cv::Mat frame) {
     GetBinary(frame);
     //GetLaneLines(1000);
-    GetStopLine(20,50,200,5000);
-    GetLaneLines(2000);
+    GetStopLine(20,50,100,3000,8);
+    GetLaneLines(600);
     if (debug_flag_) {
         std::cout << lane_lines_.size() << " lines are detected" << "    ";
     }
@@ -79,8 +82,10 @@ int LaneDetector::GetBinaryFromEqualizedGrayscale(const cv::Mat img_gray,
         std::cout<<"error in GetBinaryFromEqualizedGrayscale: img_gray is empty"<<std::endl;
         return false;
     }//if
-    equalizeHist(img_gray, img_binary_equalized);
+    //equalizeHist(img_gray, img_binary_equalized);
     threshold(img_gray, img_binary_equalized, gray_threshold, 255, cv::THRESH_BINARY);
+
+
     return true;
 }//GetBinaryFromEqualizedGrayscale
 
@@ -95,12 +100,15 @@ int LaneDetector::GetBinaryFromRules(const cv::Mat img_gray,
 
     img_binary_rules = cv::Mat(img_gray.size(), CV_8U);
     img_binary_rules.setTo(0);
-    int diff_left, diff_right;
+    int diff_left, diff_right, diff_left_right;
     for (int row = 0; row < img_gray.rows; row++){
         for (int col = 0 + lane_line_width; col < img_gray.cols - lane_line_width; col++){
+            int tmp_difference_threshold = difference_threshold * (1 - 0.3 * (img_gray.rows - row)/img_gray.rows - 0.3 * 2 *abs(col - img_gray.cols/2)/img_gray.cols);
             diff_left = img_gray.at<uchar>(row, col) - img_gray.at<uchar>(row, col - lane_line_width);
             diff_right = img_gray.at<uchar>(row, col) - img_gray.at<uchar>(row, col + lane_line_width);
-            if (diff_left > difference_threshold && diff_right > difference_threshold){
+            //diff_left_right = abs(img_gray.at<uchar>(row, col - lane_line_width) - img_gray.at<uchar>(row, col + lane_line_width));
+
+            if (diff_left > tmp_difference_threshold && diff_right > tmp_difference_threshold ){
                 img_binary_rules.at<uchar>(row, col) = 255;
             }//if
         }//for col
@@ -163,11 +171,32 @@ int LaneDetector::GetBinary(const cv::Mat frame_input) {
     cv::Mat img_bird_eye_gray;
     cvtColor(img_bird_eye_, img_bird_eye_gray, cv::COLOR_BGR2GRAY);
     cv::Mat img_binary_rules;
-    GetBinaryFromRules(img_bird_eye_gray, 15 ,25, img_binary_rules);
-    GetStopLineBinary(img_bird_eye_gray,15,40);
+    GetBinaryFromRules(img_bird_eye_gray, 12 ,30, img_binary_rules);
+    GetStopLineBinary(img_bird_eye_gray,10,40);
     cv::Mat img_binary_equalized;
-    GetBinaryFromEqualizedGrayscale(img_bird_eye_gray, 170, img_binary_equalized);//170
-    cv::bitwise_and(img_binary_rules, img_binary_equalized, img_bird_eye_binary_);
+    GetBinaryFromEqualizedGrayscale(img_bird_eye_gray, 175, img_binary_equalized);//170
+    cv::Mat tmp_test;
+    DeleteBigConnectedRegion(img_binary_equalized, tmp_test, 1, 5000);
+    cv::imshow("tmp_test",tmp_test);
+    //    cv::Mat img_white_lanes,img_yello_lanes;
+    //    cv::Scalar white_high(180,30,255),white_low(0,0,180);
+    //    GetBinaryFromHSV(img_bird_eye_,white_low,white_high,img_white_lanes);
+    //    cv::Scalar yello_high(34,255,255),yello_low(11,43,46);
+    //    GetBinaryFromHSV(img_bird_eye_,yello_low,yello_high,img_yello_lanes);
+    //    cv::Mat image_hsv;
+    //    cv::addWeighted(img_white_lanes, 1, img_yello_lanes, 1, 0., image_hsv);
+    //    cv::imshow("img_yello_lanes", img_yello_lanes);
+    //    cv::imshow("img_white_lanes", img_white_lanes);
+    //    cv::imshow("image_hsv", image_hsv);
+
+
+    cv::bitwise_and(img_binary_rules, tmp_test, img_bird_eye_binary_);
+    cv::bitwise_and(img_binary_stop_line_, img_binary_equalized, img_binary_stop_line_);
+    //    cv::Mat gaussian_image;
+    //    cv::GaussianBlur(img_bird_eye_gray,gaussian_image,cv::Size(3,3),0);
+    //    cv::imshow("GaussianBlur", gaussian_image);
+    //    cv::Canny(gaussian_image,gaussian_image,30,40);
+    //    cv::imshow("Canny", gaussian_image);
 
     if (debug_flag_) {
         cv::imshow("img_bird_eye_", img_bird_eye_);
@@ -217,16 +246,21 @@ int LaneDetector::GetLaneLineCenter(const int histogram_width,
     }//if
 
     //获取直方图
-    int number_histogram = floor(img_bird_eye_binary_.cols / histogram_width);
+    float number_histogram = floor(img_bird_eye_binary_.cols / histogram_width);
     cv::Mat histogram = cv::Mat(1, number_histogram, CV_32S, 0.0);
-    for (int number = 0; number < number_histogram; ++number)
-        for (int row = start_row; row < img_bird_eye_binary_.rows; row++){
+    for (float number = 0; number < number_histogram; ++number){
+        float tmp1 = number_histogram/2.0 -abs(number - number_histogram/2.0);
+        float tmp2 = 1 + 0.4 * tmp1/number_histogram * 2.0;
+        int tmp_start_row = start_row * tmp2;
+
+        for (int row = img_bird_eye_binary_.rows - 1; row > tmp_start_row; row--){
             for (int tmp_col = number*histogram_width; tmp_col < (number +1)*histogram_width; ++tmp_col){
                 if (img_bird_eye_binary_.at<uchar>(row, tmp_col) == 255)
                     histogram.at<int>(0, number) = histogram.at<int>(0, number) + 1;
+
             }//for tmp_col
         }//for row
-
+    }
     //std::cout << histogram << std::endl;
 
     //得到直方图峰值
@@ -250,7 +284,7 @@ int LaneDetector::GetLaneLineCenter(const int histogram_width,
 
     for (int i = 0; i < histogram.cols; i++){
         if (histogram.at<int>(0, i) > 0){
-            center_points.push_back(i*histogram_width);
+            center_points.push_back((i +0.5)*histogram_width);
         }//if
     }//for
 
@@ -298,11 +332,14 @@ int LaneDetector::GetStopLineCenter(const int histogram_width,
 int LaneDetector::GetStopLine(const int number_windows,
                               const int window_half_width,
                               const int window_min_pixels,
-                              const int stop_line_min_pixels) {
+                              const int stop_line_min_pixels,
+                              const int stop_line_min_windows) {
     if (img_binary_stop_line_.empty()) {
         return -1;
     }//if
+
     stop_line_.line_factors.clear();
+    stop_line_.detected_flag = false;
     int center_point = 0;
     GetStopLineCenter(10,500, center_point);
     if (center_point == -1) {
@@ -317,6 +354,7 @@ int LaneDetector::GetStopLine(const int number_windows,
     int window_height = floor(img_bird_eye_binary_.cols / number_windows);
     std::vector<int> stop_line_inds_x;
     std::vector<int> stop_line_inds_y;
+    int tmp_num_windows = 0;
     for (int index_windows = 0; index_windows < number_windows; ++index_windows)
     {
         int win_y_low = tmp_center - window_half_width;
@@ -335,36 +373,30 @@ int LaneDetector::GetStopLine(const int number_windows,
         std::vector<int> window_inds_y;
 
         for (int row = win_y_low; row < win_y_high; row++)
-            for (int col = win_x_low; col < win_x_high; col++)
-            {
-                if (img_binary_stop_line_.at<uchar>(row, col) == 255)
-                {
+            for (int col = win_x_low; col < win_x_high; col++){
+                if (img_binary_stop_line_.at<uchar>(row, col) == 255){
                     window_inds_x.push_back(col);
                     window_inds_y.push_back(row);
                 }
-
             }
-        if (window_inds_x.size() > window_min_pixels)
-        {
+
+        if (window_inds_x.size() > window_min_pixels){
             stop_line_inds_x.insert(stop_line_inds_x.end(), window_inds_x.begin(), window_inds_x.end());
             stop_line_inds_y.insert(stop_line_inds_y.end(), window_inds_y.begin(), window_inds_y.end());
             tmp_center = std::accumulate(window_inds_y.begin(), window_inds_y.end(), 0.0) / window_inds_y.size();
+            tmp_num_windows++;
         }
     }
     vecan::Fit fit_state;
 
-    if (stop_line_inds_x.size() > stop_line_min_pixels) {
-
+    if (stop_line_inds_x.size() > stop_line_min_pixels && tmp_num_windows >= stop_line_min_windows) {
         fit_state.polyfit(stop_line_inds_x, stop_line_inds_y, 1, true);
         fit_state.getFactor(stop_line_.line_factors);
         stop_line_.detected_flag = true;
     }
-    else{
-        stop_line_.detected_flag = false;
-    }
-
     if (debug_flag_) {
         cv::imshow("stop_line_windows", windows_img);
+        cvWaitKey(1);
     }
     if (save_flag_) {
         cv::imwrite("src/image_lane_detector/result/stop_line_windows.bmp", windows_img);
@@ -396,6 +428,7 @@ int LaneDetector::GetCandidateBySlidingWindows(const std::vector<int> center_poi
         std::vector<int> lane_lines_points_y;
         int last_offset = 0;
         int tmp_last_window_flag = 0;
+        int tmp_window_empty_flag = -1;
         for (int index_windows = 0; index_windows < number_windows; ++index_windows) {
             int window_y_low = img_bird_eye_binary_.rows - (index_windows + 1) * window_height;
             int window_y_high = img_bird_eye_binary_.rows - index_windows  * window_height;
@@ -420,21 +453,38 @@ int LaneDetector::GetCandidateBySlidingWindows(const std::vector<int> center_poi
                         window_inds_y.push_back(row);
                     }//if
                 }//for col
-            if (window_inds_x.size() > window_min_pixels) {
-                lane_lines_points_x.insert(lane_lines_points_x.end(), window_inds_x.begin(), window_inds_x.end());
-                lane_lines_points_y.insert(lane_lines_points_y.end(), window_inds_y.begin(), window_inds_y.end());
 
-                int tmp_center = std::accumulate(window_inds_x.begin(), window_inds_x.end(), 0.0) / window_inds_x.size();
-                if (tmp_last_window_flag) {
-                    last_offset = tmp_center - window_center[line_index];
+
+            if (window_inds_x.size() > window_min_pixels && tmp_window_empty_flag < 10) {
+                tmp_window_empty_flag = 0;
+                double tmp_average = 0, tmp_variance = 0;
+                Calculatevariance(window_inds_x, tmp_average, tmp_variance);
+                //std::cout<<tmp_variance<<std::endl;
+                if(tmp_variance < 4){
+                    lane_lines_points_x.insert(lane_lines_points_x.end(), window_inds_x.begin(), window_inds_x.end());
+                    lane_lines_points_y.insert(lane_lines_points_y.end(), window_inds_y.begin(), window_inds_y.end());
+
+                    int tmp_center = std::accumulate(window_inds_x.begin(), window_inds_x.end(), 0.0) / window_inds_x.size();
+                    if (tmp_last_window_flag) {
+                        last_offset = tmp_center - window_center[line_index];
+                    }
+                    if(tmp_center * last_offset < 0){
+                        window_center[line_index] = tmp_center;
+                    }
+                    else{
+                        window_center[line_index] = tmp_center;
+                    }
+
+                    tmp_last_window_flag = 1;
                 }
-
-                window_center[line_index] = tmp_center;
-                tmp_last_window_flag = 1;
             }//if
             else {
                 window_center[line_index] += last_offset;
                 tmp_last_window_flag = 0;
+                if(tmp_window_empty_flag != -1){
+                    tmp_window_empty_flag++;
+                }
+
             }
         }//for index_windows
         candidate_x.push_back(lane_lines_points_x);
@@ -448,11 +498,11 @@ int LaneDetector::GetCandidateBySlidingWindows(const std::vector<int> center_poi
 
 int LaneDetector::GetLaneLines(const int lane_line_min_pixels){
     std::vector<int> line_center_points;
-    GetLaneLineCenter(20, 100, 100, 500, line_center_points);
+    GetLaneLineCenter(20, 100, 100, 450, line_center_points);
 
     std::vector< std::vector<int>> candidate_x;
     std::vector< std::vector<int>> candidate_y;
-    GetCandidateBySlidingWindows(line_center_points,30,50,100, candidate_x, candidate_y);
+    GetCandidateBySlidingWindows(line_center_points,60,50,50, candidate_x, candidate_y);
 
     if (candidate_x.size() != candidate_y.size()) {
         std::cout<<"error in GetLaneLines: candidate points not good "<<std::endl;
@@ -467,8 +517,12 @@ int LaneDetector::GetLaneLines(const int lane_line_min_pixels){
 
     Fit fitter;
     RansacCurve ransac_fitter;
+    std::set<int> tmp_row_num;
     for (int line_index = 0; line_index < candidate_x.size(); ++line_index) {
+
         if (candidate_x[line_index].size() > lane_line_min_pixels) {
+            tmp_row_num.clear();
+
             std::vector<double> tmp_factors;
             LaneLine tmp_line;
             tmp_line.score = (candidate_y[line_index].size() - 3000.0) / 3000.0;
@@ -476,39 +530,44 @@ int LaneDetector::GetLaneLines(const int lane_line_min_pixels){
             int yellow_points_num = 0;
             for (int point_index = 0; point_index < candidate_x[line_index].size(); ++point_index)
             {
+                tmp_row_num.insert(candidate_y[line_index][point_index]);
                 if (img_HSV.at<uchar>(candidate_y[line_index][point_index], candidate_x[line_index][point_index]) > 0)
                     yellow_points_num++;
             }
+            if(tmp_row_num.size() > 70){
+                if (yellow_points_num * 3 > candidate_x[line_index].size())
+                    tmp_line.color = LaneLine::YELLOW;
+                else
+                    tmp_line.color = LaneLine::WHITE;
 
-            if (yellow_points_num * 3 > candidate_x[line_index].size())
-                tmp_line.color = LaneLine::YELLOW;
-            else
-                tmp_line.color = LaneLine::WHITE;
+                GetLaneLineTypeAndRange(candidate_x[line_index], candidate_y[line_index], tmp_line);
+                tmp_line.id = line_index;
 
-            GetLaneLineTypeAndRange(candidate_x[line_index], candidate_y[line_index], tmp_line);
-            tmp_line.id = line_index;
+                fitter.polyfit(candidate_y[line_index], candidate_x[line_index], 2, true);
+                fitter.getFactor(tmp_factors);
+                tmp_line.lines_factors = tmp_factors;
 
-            fitter.polyfit(candidate_y[line_index], candidate_x[line_index], 2, true);
-            tmp_line.ransac_lines_factors = ransac_fitter.GetBestModel(candidate_y[line_index], candidate_x[line_index]);
-            fitter.getFactor(tmp_factors);
-            tmp_line.lines_factors = tmp_factors;
-            tmp_line.lines_factors[0] = tmp_line.ransac_lines_factors[2];
-            tmp_line.lines_factors[1] = tmp_line.ransac_lines_factors[1];
-            tmp_line.lines_factors[2] = tmp_line.ransac_lines_factors[0];
-            lane_lines_.push_back(tmp_line);
+                //            tmp_line.ransac_lines_factors = ransac_fitter.GetBestModel(candidate_y[line_index], candidate_x[line_index]);
+                //            tmp_line.lines_factors[0] = tmp_line.ransac_lines_factors[2];
+                //            tmp_line.lines_factors[1] = tmp_line.ransac_lines_factors[1];
+                //            tmp_line.lines_factors[2] = tmp_line.ransac_lines_factors[0];
+                lane_lines_.push_back(tmp_line);
 
-            if (debug_flag_) {
-                for(int row = 0; row < img_windows_.rows;++row){
-                    int tmp_col1 = tmp_line.ransac_lines_factors[0] * row *row + tmp_line.ransac_lines_factors[1] * row + tmp_line.ransac_lines_factors[2];
-                    int tmp_col2 = tmp_line.lines_factors[2] * row *row + tmp_line.lines_factors[1] * row + tmp_line.lines_factors[0];
-                    if(tmp_col1 >= 0 && tmp_col1 < img_windows_.cols){
-                        img_windows_.at<cv::Vec3b>(row,tmp_col1) = cv::Vec3b(255,0,0);
+                if (debug_flag_) {
+                    for(int row = 0; row < img_windows_.rows;++row){
+                        //int tmp_col1 = tmp_line.ransac_lines_factors[0] * row *row + tmp_line.ransac_lines_factors[1] * row + tmp_line.ransac_lines_factors[2];
+                        int tmp_col2 = tmp_line.lines_factors[2] * row *row + tmp_line.lines_factors[1] * row + tmp_line.lines_factors[0];
+                        //if(tmp_col1 >= 0 && tmp_col1 < img_windows_.cols){
+                        //img_windows_.at<cv::Vec3b>(row,tmp_col1) = cv::Vec3b(255,0,0);
+                        //}
+                        if(tmp_col2 >= 0 && tmp_col2 < img_windows_.cols){
+                            img_windows_.at<cv::Vec3b>(row,tmp_col2) = cv::Vec3b(0,0,255);
+                        }
                     }
-                    if(tmp_col2 >= 0 && tmp_col2 < img_windows_.cols){
-                        img_windows_.at<cv::Vec3b>(row,tmp_col2) = cv::Vec3b(0,0,255);
-                    }
-                }
-            }//if
+                }//if
+            }
+
+
 
         }//if
     }//for line_index
@@ -667,7 +726,9 @@ int LaneDetector::GetLane(const int min_lane_width,
             lanes_[lane_index].right_change_type = Lane::REJECT;
         }//else
         lanes_[lane_index].center = (pow(img_bird_eye_.rows, 2) * lanes_[lane_index].left_line.lines_factors[2] + img_bird_eye_.rows * lanes_[lane_index].left_line.lines_factors[1] + lanes_[lane_index].left_line.lines_factors[0] +
-               pow(img_bird_eye_.rows, 2) * lanes_[lane_index].right_line.lines_factors[2] + img_bird_eye_.rows * lanes_[lane_index].right_line.lines_factors[1] + lanes_[lane_index].right_line.lines_factors[0]) / 2;
+                pow(img_bird_eye_.rows, 2) * lanes_[lane_index].right_line.lines_factors[2] + img_bird_eye_.rows * lanes_[lane_index].right_line.lines_factors[1] + lanes_[lane_index].right_line.lines_factors[0]) / 2;
+
+        kalman_filter_init(lanes_[lane_index]);
     }// for lane_index
     return true;
 }// GetLane
@@ -766,7 +827,9 @@ int LaneDetector::TrackLane(const int min_lane_width,
                 lanes_[lane_index].tracking = true;
                 lanes_[lane_index].score = cv::min((*it).score + 1, 6);
                 lanes_[lane_index].id = (*it).id;
+
                 (*it) = lanes_[lane_index];
+                kalman_filter_update((*it), lanes_[lane_index].left_line.lines_factors,lanes_[lane_index].right_line.lines_factors);
             }//else
         }//for
         for (int index = 0; index < last_lanes_num; ++index) {
@@ -853,12 +916,12 @@ int LaneDetector::LineShow(const LaneLine line){
     for (int row = img_display_.rows; row > line.end_row; row--){
 
         int col =  line.lines_factors[2] * row * row + line.lines_factors[1] * row + line.lines_factors[0];
-//        int tmp_flag = 1;
-//        if (stop_line_.line_factors.size() == 2) {
-//            if (row <  stop_line_.line_factors[1] * col + stop_line_.line_factors[0]) {
-//                tmp_flag = 0;
-//            }//if row
-//        }// if
+        //        int tmp_flag = 1;
+        //        if (stop_line_.line_factors.size() == 2) {
+        //            if (row <  stop_line_.line_factors[1] * col + stop_line_.line_factors[0]) {
+        //                tmp_flag = 0;
+        //            }//if row
+        //        }// if
         if (col >= 20 && col < img_display_.cols - 20){
             for (int tmp = col - 20; tmp < col + 20; tmp++){
                 img_display_.at<cv::Vec3b>(row, tmp) = tmp_draw_color;
@@ -936,5 +999,132 @@ int LaneDetector::PublishRoadMsg(local_messages::Road &road_msg){
 
 }//PublishRoadMsg
 
+int LaneDetector::kalman_filter_init(Lane &lane){
+    /*------------------------------------------------------------------*/
+    lane.kalman_filter_[0].init(3,3);
+    lane.kalman_filter_[0].transitionMatrix = (cv::Mat_<float>(3, 3) << 1, 0, 0, 0, 1, 0, 0, 0, 1);  //转移矩阵A[1,1;0,1]
+    cv::setIdentity(lane.kalman_filter_[0].measurementMatrix);                             //测量矩阵H
+    cv::setIdentity(lane.kalman_filter_[0].processNoiseCov, cv::Scalar::all(1e-1));            //系统噪声方差矩阵Q
+    cv::setIdentity(lane.kalman_filter_[0].measurementNoiseCov, cv::Scalar::all(1e-1));        //测量噪声方差矩阵R
+    cv::setIdentity(lane.kalman_filter_[0].errorCovPost, cv::Scalar::all(1));                  //后验错误估计协方差矩阵P
+    if(lane.left_line.lines_factors.size()!=3){
+        std::cout<<"bad parameter size"<<std::endl;
+        return false;
+    }
+    else{
+        lane.kalman_filter_[0].statePost.at<float>(0,0) = lane.left_line.lines_factors[0];
+        lane.kalman_filter_[0].statePost.at<float>(1,0) = lane.left_line.lines_factors[1];
+        lane.kalman_filter_[0].statePost.at<float>(2,0) = lane.left_line.lines_factors[2];
+    }
+
+    /*------------------------------------------------------------------------------*/
+    lane.kalman_filter_[1].init(3,3);
+    lane.kalman_filter_[1].transitionMatrix = (cv::Mat_<float>(3, 3) << 1, 0, 0, 0, 1, 0, 0, 0, 1);  //转移矩阵A[1,1;0,1]
+    cv::setIdentity(lane.kalman_filter_[1].measurementMatrix);                             //测量矩阵H
+    cv::setIdentity(lane.kalman_filter_[1].processNoiseCov, cv::Scalar::all(1e-1));            //系统噪声方差矩阵Q
+    cv::setIdentity(lane.kalman_filter_[1].measurementNoiseCov, cv::Scalar::all(1e-1));        //测量噪声方差矩阵R
+    cv::setIdentity(lane.kalman_filter_[1].errorCovPost, cv::Scalar::all(1));                  //后验错误估计协方差矩阵P
+    if(lane.right_line.lines_factors.size()!=3){
+        std::cout<<"bad parameter size"<<std::endl;
+        return false;
+    }
+    else{
+        lane.kalman_filter_[1].statePost.at<float>(0,0) = lane.right_line.lines_factors[0];
+        lane.kalman_filter_[1].statePost.at<float>(1,0) = lane.right_line.lines_factors[1];
+        lane.kalman_filter_[1].statePost.at<float>(2,0) = lane.right_line.lines_factors[2];
+    }
+
+    return true;
+}//kalman_filter_init
+
+int LaneDetector::kalman_filter_update(Lane &lane, std::vector<double> left_paramters, std::vector<double> right_paramters){
+    if(left_paramters.size() != 3 || right_paramters.size() != 3 || lane.left_line.lines_factors.size() != 3 || lane.right_line.lines_factors.size() != 3){
+        return false;
+    }
+    lane.kalman_filter_[0].predict();
+    cv::Mat left_measurement(3, 1, CV_32F);
+    left_measurement.at<float>(0,0) = left_paramters[0];
+    left_measurement.at<float>(1,0) = left_paramters[1];
+    left_measurement.at<float>(2,0) = left_paramters[2];
+    cv::Mat update_left_factors = lane.kalman_filter_[0].correct(left_measurement);
+
+    lane.left_line.lines_factors[0] = update_left_factors.at<float>(0,0);
+    lane.left_line.lines_factors[1] = update_left_factors.at<float>(1,0);
+    lane.left_line.lines_factors[2] = update_left_factors.at<float>(2,0);
+
+    lane.kalman_filter_[1].predict();
+    cv::Mat right_measurement(3, 1, CV_32F);
+    right_measurement.at<float>(0,0) = right_paramters[0];
+    right_measurement.at<float>(1,0) = right_paramters[1];
+    right_measurement.at<float>(2,0) = right_paramters[2];
+    cv::Mat update_right_factors = lane.kalman_filter_[1].correct(right_measurement);
+
+    lane.right_line.lines_factors[0] = update_right_factors.at<float>(0,0);
+    lane.right_line.lines_factors[1] = update_right_factors.at<float>(1,0);
+    lane.right_line.lines_factors[2] = update_right_factors.at<float>(2,0);
+
+    return true;
+}//kalman_filter_update
+
+template<typename T> int LaneDetector::Calculatevariance(std::vector<T> data, double &average, double &variance){
+    T tmp_sum = std::accumulate(data.begin(),data.end(),0);
+    average = tmp_sum/data.size();
+    T tmp_variance_sum = 0;
+    for(int i =0; i < data.size(); ++i){
+        tmp_variance_sum += (data[i] - average)*(data[i] - average);
+    }
+    variance = sqrt(tmp_variance_sum/data.size());
+}//Calculatevariance
+
+int LaneDetector::DeleteBigConnectedRegion(cv::Mat img_gray, cv::Mat &img_output, const int rectangle_num, const int max_area_threshold){
+    img_output = img_gray.clone();
+
+    cv::Mat img_tmp_area = img_gray.clone();
+    std::vector<std::vector<cv::Point>> contours;
+    cv::Mat element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(10, 10));
+    cv::dilate(img_tmp_area, img_tmp_area, element);
+    cv::findContours(img_gray, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
+    cv::Scalar white_color = 255;
+
+    for(int area_index = 0; area_index < contours.size(); ++area_index){
+        double tmp_area = cv::contourArea(contours[area_index]);
+        if(tmp_area > max_area_threshold){
+            cv::drawContours(img_tmp_area, contours, area_index, white_color, CV_FILLED);
+        }
+    }
+
+    cv::Mat erode_element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(60, 10));
+    cv::Mat dilate_element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(60, 20));
+
+    cv::erode(img_tmp_area, img_tmp_area, erode_element);
+    cv::dilate(img_tmp_area, img_tmp_area, dilate_element);
+    //cv::morphologyEx(img_tmp_area, img_tmp_area, cv::MORPH_OPEN, element);
+
+
+    //    int tmp_image_height = img_gray.rows/rectangle_num;
+    //    for(int rectangle_index = 0; rectangle_index < rectangle_num; ++rectangle_index){
+    //        cv::Rect tmp_rect(0, (rectangle_index) * tmp_image_height, img_open.cols, tmp_image_height);
+    //        cv::Mat tmp_roi_img;
+    //        img_open(tmp_rect).copyTo(tmp_roi_img);
+    //        std::vector<std::vector<cv::Point>> contours;
+    //        cv::findContours(tmp_roi_img, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
+    //        cv::Scalar black_color = 0;
+    //        for(int area_index = 0; area_index < contours.size(); ++area_index){
+    //            double tmp_area = cv::contourArea(contours[area_index]);
+    //            if(tmp_area > max_area_threshold){
+    //                cv::drawContours(tmp_roi_img, contours, area_index, black_color, CV_FILLED);
+    //            }
+    //        }
+    //        tmp_roi_img.copyTo(img_output(tmp_rect));
+    //    }
+
+    cv::bitwise_not(img_tmp_area,img_output);//逻辑非，求补集
+    cv::bitwise_and(img_output,img_gray,img_output);//逻辑与，求交集
+
+    return true;
+}//DeleteBigConnectedRegion
+
 } //namespace perception
 } //namespace vecan
+
+

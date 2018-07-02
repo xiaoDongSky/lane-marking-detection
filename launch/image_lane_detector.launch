@@ -10,7 +10,7 @@
         <arg name="save_flag"  default="false"/>
 
         <!-- Lane detector -->
-        <node pkg="image_lane_detector" name="image_lane_detector" type="image_lane_detector">
+        <node pkg="image_lane_detector" name="image_lane_detector" type="image_lane_detector" output="screen">
                 <param name="mode" type="str" value="$(arg mode)"/>
                 <param name="pictures_path" type="str" value="$(arg pictures_path)"/>
                 <param name="image_topic_name" type="str" value="$(arg image_topic_name)"/>

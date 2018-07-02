@@ -57,6 +57,8 @@ struct Lane {
     // Direct distance to the next stop line.
     float distanceToStop;
 
+    cv::KalmanFilter kalman_filter_[2];
+
 	//find ==
 	bool operator==(const Lane& objstruct) const {
 		return (objstruct.center >= center - 50) && (objstruct.center <= center + 50);

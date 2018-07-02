@@ -12,12 +12,19 @@
 namespace vecan {
 namespace perception {
 struct LaunchPara{
+    //The program working mode(on-line or off-line)
     std::string mode;
+    //The path of pictures under off-line mode
     std::string pictures_path;
+    //The name of topic under on-line mode
     std::string image_topic_name;
+    //The name of the result topic
     std::string road_topic_name;
+    //The show flag of program
     bool show_flag;
+    //The debug flag of program
     bool debug_flag;
+    //The save flag of program
     bool save_flag;
 };
 
