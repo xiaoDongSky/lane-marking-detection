@@ -954,7 +954,7 @@ int LaneDetector::PublishRoadMsg(local_messages::Road &road_msg){
         if(tracking_lanes_[index].score > 3){
             lane_msg.id = tracking_lanes_[index].id;
             lane_msg.relation = local_messages::Lane::NEAR;
-            lane_msg.preferred = false;
+            //lane_msg.preferred = false;
             lane_msg.offsetIndex = tracking_lanes_[index].offsetIndex;
             lane_msg.offset = tracking_lanes_[index].offset;
             lane_msg.dirDiff = tracking_lanes_[index].dirDiff;
